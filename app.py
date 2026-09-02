@@ -13,8 +13,8 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("⚽ GolAlert PRO — LIVE + Predicciones")
-st.markdown("Conexión segura a API‑Football usando Secrets.")
+st.title("⚽ GolAlert PRO — LIVE + Predicciones (PLAN PRO)")
+st.markdown("Usando API‑Football PLAN PRO (sin estadísticas avanzadas).")
 
 # ---------------------------------------------------------
 # API KEY DESDE SECRETS
@@ -27,131 +27,107 @@ HEADERS = {
 }
 
 # ---------------------------------------------------------
-# FUNCIÓN: PARTIDOS EN DIRECTO
+# OBTENER PARTIDOS DE HOY Y FILTRAR LOS QUE ESTÁN EN JUEGO
 # ---------------------------------------------------------
-def obtener_partidos_live():
-    url = f"{BASE_URL}/fixtures?live=all"
+def obtener_partidos_live_pro():
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    url = f"{BASE_URL}/fixtures?date={hoy}"
     resp = requests.get(url, headers=HEADERS).json()
-    return resp.get("response", [])
+
+    partidos = []
+    for p in resp.get("response", []):
+        estado = p["fixture"]["status"]["short"]
+        # Estados que indican partido en juego
+        if estado in ["1H", "HT", "2H", "ET"]:
+            partidos.append(p)
+
+    return partidos
 
 # ---------------------------------------------------------
-# FUNCIÓN: ESTADÍSTICAS LIVE DE UN PARTIDO
+# MODELOS SENCILLOS DE PREDICCIÓN (SIN STATS LIVE)
 # ---------------------------------------------------------
-def obtener_stats_live(fixture_id):
-    url = f"{BASE_URL}/fixtures/statistics?fixture={fixture_id}"
-    resp = requests.get(url, headers=HEADERS).json()
-    stats = resp.get("response", [])
-    if len(stats) < 2:
-        return None, None
-
-    home = stats[0]["statistics"]
-    away = stats[1]["statistics"]
-    return home, away
-
-# ---------------------------------------------------------
-# EXTRAER VALORES DE ESTADÍSTICAS
-# ---------------------------------------------------------
-def get_stat(stats, name):
-    for s in stats:
-        if s["type"] == name:
-            return s["value"] if s["value"] is not None else 0
-    return 0
-
-# ---------------------------------------------------------
-# MODELO SIMPLE DE PREDICCIÓN DE GOL (sin pickle)
-# ---------------------------------------------------------
-def prediccion_gol(attacks, dangerous, shots_on, possession):
-    # Modelo simple basado en ponderaciones
-    score = (
-        attacks * 0.02 +
-        dangerous * 0.05 +
-        shots_on * 0.12 +
-        possession * 0.01
-    )
-    prob = np.clip(score, 0, 100)
+def prob_gol_simple(minuto, goles_totales):
+    """
+    Modelo muy simple:
+    - A más minuto, más probabilidad de gol (por cansancio, riesgo, etc.)
+    - Si ya hay goles, el partido es más abierto.
+    """
+    base = minuto * 0.8
+    extra = goles_totales * 10
+    prob = np.clip(base + extra, 0, 100)
     return round(prob, 1)
 
-# ---------------------------------------------------------
-# PREDICCIÓN BTTS
-# ---------------------------------------------------------
-def prediccion_btts(prob_home, prob_away):
-    btts = (prob_home * prob_away) / 100
-    return round(btts, 1)
+def prob_btts_simple(goles_local, goles_visitante, prob_gol_total):
+    """
+    BTTS simple:
+    - Si ambos ya han marcado, prob alta.
+    - Si solo uno ha marcado, depende de la probabilidad total de gol.
+    """
+    if goles_local > 0 and goles_visitante > 0:
+        return 90.0
+    elif goles_local > 0 or goles_visitante > 0:
+        return round(prob_gol_total * 0.6, 1)
+    else:
+        return round(prob_gol_total * 0.4, 1)
+
+def prob_over25_simple(goles_totales, prob_gol_total):
+    """
+    Over 2.5 simple:
+    - Si ya hay 3 o más goles, casi asegurado.
+    - Si hay 2, depende de probabilidad de gol.
+    - Si hay menos, se ajusta.
+    """
+    if goles_totales >= 3:
+        return 95.0
+    elif goles_totales == 2:
+        return round(prob_gol_total * 0.8, 1)
+    else:
+        return round(prob_gol_total * 0.5, 1)
 
 # ---------------------------------------------------------
-# PREDICCIÓN OVER 2.5
+# MOSTRAR PARTIDOS EN DIRECTO (PLAN PRO)
 # ---------------------------------------------------------
-def prediccion_over25(prob_home, prob_away):
-    total = prob_home + prob_away
-    over = np.clip(total * 0.6, 0, 100)
-    return round(over, 1)
+st.header("🔴 Partidos EN DIRECTO (PLAN PRO)")
 
-# ---------------------------------------------------------
-# MOSTRAR PARTIDOS EN DIRECTO
-# ---------------------------------------------------------
-st.header("🔴 Partidos EN DIRECTO con estadísticas y predicciones")
-
-partidos_live = obtener_partidos_live()
+partidos_live = obtener_partidos_live_pro()
 
 if len(partidos_live) == 0:
-    st.warning("No hay partidos en directo ahora mismo.")
+    st.warning("No hay partidos en directo ahora mismo (según API‑Football PRO).")
 else:
     for p in partidos_live:
         fixture = p["fixture"]
         teams = p["teams"]
         goals = p["goals"]
 
-        fixture_id = fixture["id"]
+        minuto = fixture["status"]["elapsed"] or 0
+        goles_local = goals["home"] or 0
+        goles_visitante = goals["away"] or 0
+        goles_totales = goles_local + goles_visitante
 
         st.subheader(f"{teams['home']['name']} vs {teams['away']['name']}")
-        st.write(f"⏱ Minuto: **{fixture['status']['elapsed']}**")
-        st.write(f"⚽ Marcador: **{goals['home']} - {goals['away']}**")
+        st.write(f"⏱ Minuto: **{minuto}**")
+        st.write(f"⚽ Marcador: **{goles_local} - {goles_visitante}**")
+        st.write(f"🏟 Estado: **{fixture['status']['short']}**")
 
-        # Obtener estadísticas LIVE
-        home_stats, away_stats = obtener_stats_live(fixture_id)
-
-        if home_stats is None:
-            st.info("Sin estadísticas LIVE disponibles.")
-            st.markdown("---")
-            continue
-
-        # Extraer estadísticas
-        h_att = get_stat(home_stats, "Attacks")
-        a_att = get_stat(away_stats, "Attacks")
-
-        h_dang = get_stat(home_stats, "Dangerous Attacks")
-        a_dang = get_stat(away_stats, "Dangerous Attacks")
-
-        h_shots = get_stat(home_stats, "Shots on Goal")
-        a_shots = get_stat(away_stats, "Shots on Goal")
-
-        h_pos = get_stat(home_stats, "Ball Possession")
-        a_pos = get_stat(away_stats, "Ball Possession")
-
-        # Predicciones
-        prob_home = prediccion_gol(h_att, h_dang, h_shots, h_pos)
-        prob_away = prediccion_gol(a_att, a_dang, a_shots, a_pos)
-
-        prob_btts = prediccion_btts(prob_home, prob_away)
-        prob_over25 = prediccion_over25(prob_home, prob_away)
+        # Predicciones simples basadas en minuto y goles
+        prob_gol_total = prob_gol_simple(minuto, goles_totales)
+        prob_btts = prob_btts_simple(goles_local, goles_visitante, prob_gol_total)
+        prob_over25 = prob_over25_simple(goles_totales, prob_gol_total)
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.metric("Prob. gol local (5 min)", f"{prob_home}%")
+            st.metric("Prob. gol (próx. min)", f"{prob_gol_total}%")
 
         with col2:
-            st.metric("Prob. gol visitante (5 min)", f"{prob_away}%")
-
-        with col3:
             st.metric("BTTS", f"{prob_btts}%")
 
-        st.metric("Over 2.5", f"{prob_over25}%")
+        with col3:
+            st.metric("Over 2.5", f"{prob_over25}%")
 
         st.markdown("---")
 
 # ---------------------------------------------------------
 # PIE DE PÁGINA
 # ---------------------------------------------------------
-st.markdown("Creado por José — GolAlert PRO (LIVE + Predicciones)")
-
+st.markdown("Creado por José — GolAlert PRO (PLAN PRO, sin estadísticas avanzadas)")
