@@ -13,8 +13,8 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("⚽ GolAlert PRO — LIVE + Predicciones (PLAN PRO)")
-st.markdown("Usando API‑Football PLAN PRO (sin estadísticas avanzadas).")
+st.title("⚽ GolAlert PRO — Solo Ligas Favoritas (PLAN PRO)")
+st.markdown("Partidos en directo + predicciones (sin estadísticas LIVE).")
 
 # ---------------------------------------------------------
 # API KEY DESDE SECRETS
@@ -27,7 +27,25 @@ HEADERS = {
 }
 
 # ---------------------------------------------------------
-# OBTENER PARTIDOS DE HOY Y FILTRAR LOS QUE ESTÁN EN JUEGO
+# TUS LIGAS FAVORITAS (incluye Championship y Ligue 2)
+# ---------------------------------------------------------
+LIGAS_FAVORITAS = [
+    140,  # LaLiga
+    141,  # Segunda División
+    39,   # Premier League
+    40,   # Championship (ENG 2)
+    135,  # Serie A
+    78,   # Bundesliga
+    79,   # 2. Bundesliga
+    61,   # Ligue 1
+    62,   # Ligue 2 (Francia 2)
+    94,   # Primeira Liga
+    88,   # Eredivisie
+    144   # Jupiler Pro League
+]
+
+# ---------------------------------------------------------
+# OBTENER PARTIDOS EN DIRECTO (PLAN PRO)
 # ---------------------------------------------------------
 def obtener_partidos_live_pro():
     hoy = datetime.now().strftime("%Y-%m-%d")
@@ -36,33 +54,27 @@ def obtener_partidos_live_pro():
 
     partidos = []
     for p in resp.get("response", []):
+        liga_id = p["league"]["id"]
         estado = p["fixture"]["status"]["short"]
-        # Estados que indican partido en juego
-        if estado in ["1H", "HT", "2H", "ET"]:
-            partidos.append(p)
+
+        # Solo tus ligas favoritas
+        if liga_id in LIGAS_FAVORITAS:
+            # Solo partidos en directo
+            if estado in ["1H", "HT", "2H", "ET"]:
+                partidos.append(p)
 
     return partidos
 
 # ---------------------------------------------------------
-# MODELOS SENCILLOS DE PREDICCIÓN (SIN STATS LIVE)
+# MODELOS DE PREDICCIÓN (sin estadísticas LIVE)
 # ---------------------------------------------------------
 def prob_gol_simple(minuto, goles_totales):
-    """
-    Modelo muy simple:
-    - A más minuto, más probabilidad de gol (por cansancio, riesgo, etc.)
-    - Si ya hay goles, el partido es más abierto.
-    """
     base = minuto * 0.8
     extra = goles_totales * 10
     prob = np.clip(base + extra, 0, 100)
     return round(prob, 1)
 
 def prob_btts_simple(goles_local, goles_visitante, prob_gol_total):
-    """
-    BTTS simple:
-    - Si ambos ya han marcado, prob alta.
-    - Si solo uno ha marcado, depende de la probabilidad total de gol.
-    """
     if goles_local > 0 and goles_visitante > 0:
         return 90.0
     elif goles_local > 0 or goles_visitante > 0:
@@ -71,12 +83,6 @@ def prob_btts_simple(goles_local, goles_visitante, prob_gol_total):
         return round(prob_gol_total * 0.4, 1)
 
 def prob_over25_simple(goles_totales, prob_gol_total):
-    """
-    Over 2.5 simple:
-    - Si ya hay 3 o más goles, casi asegurado.
-    - Si hay 2, depende de probabilidad de gol.
-    - Si hay menos, se ajusta.
-    """
     if goles_totales >= 3:
         return 95.0
     elif goles_totales == 2:
@@ -85,14 +91,14 @@ def prob_over25_simple(goles_totales, prob_gol_total):
         return round(prob_gol_total * 0.5, 1)
 
 # ---------------------------------------------------------
-# MOSTRAR PARTIDOS EN DIRECTO (PLAN PRO)
+# MOSTRAR PARTIDOS EN DIRECTO
 # ---------------------------------------------------------
-st.header("🔴 Partidos EN DIRECTO (PLAN PRO)")
+st.header("🔴 Partidos EN DIRECTO — Solo Ligas Favoritas")
 
 partidos_live = obtener_partidos_live_pro()
 
 if len(partidos_live) == 0:
-    st.warning("No hay partidos en directo ahora mismo (según API‑Football PRO).")
+    st.warning("No hay partidos en directo en tus ligas favoritas.")
 else:
     for p in partidos_live:
         fixture = p["fixture"]
@@ -105,11 +111,11 @@ else:
         goles_totales = goles_local + goles_visitante
 
         st.subheader(f"{teams['home']['name']} vs {teams['away']['name']}")
+        st.write(f"🏟 Liga: **{p['league']['name']}**")
         st.write(f"⏱ Minuto: **{minuto}**")
         st.write(f"⚽ Marcador: **{goles_local} - {goles_visitante}**")
-        st.write(f"🏟 Estado: **{fixture['status']['short']}**")
 
-        # Predicciones simples basadas en minuto y goles
+        # Predicciones
         prob_gol_total = prob_gol_simple(minuto, goles_totales)
         prob_btts = prob_btts_simple(goles_local, goles_visitante, prob_gol_total)
         prob_over25 = prob_over25_simple(goles_totales, prob_gol_total)
@@ -130,4 +136,4 @@ else:
 # ---------------------------------------------------------
 # PIE DE PÁGINA
 # ---------------------------------------------------------
-st.markdown("Creado por José — GolAlert PRO (PLAN PRO, sin estadísticas avanzadas)")
+st.markdown("Creado por José — GolAlert PRO (Solo Ligas Favoritas, PLAN PRO)")
