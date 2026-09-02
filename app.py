@@ -26,23 +26,30 @@ HEADERS = {
     "x-apisports-key": API_KEY
 }
 
+# Comprobación de API KEY
+if not API_KEY:
+    st.error("❌ La API KEY NO se está cargando desde Secrets. Ve a Streamlit Cloud → Secrets.")
+else:
+    st.success("✅ API KEY cargada correctamente.")
+
+
 # ---------------------------------------------------------
 # TUS LIGAS FAVORITAS (incluye Championship y Ligue 2)
 # ---------------------------------------------------------
 LIGAS_FAVORITAS = [
+    40,   # Championship (ENG 2)
+    62,   # Ligue 2 (Francia 2)
+    39,   # Premier League
     140,  # LaLiga
     141,  # Segunda División
-    39,   # Premier League
-    40,   # Championship (ENG 2)
     135,  # Serie A
     78,   # Bundesliga
-    79,   # 2. Bundesliga
     61,   # Ligue 1
-    62,   # Ligue 2 (Francia 2)
     94,   # Primeira Liga
     88,   # Eredivisie
     144   # Jupiler Pro League
 ]
+
 
 # ---------------------------------------------------------
 # OBTENER PARTIDOS EN DIRECTO (PLAN PRO)
@@ -64,6 +71,7 @@ def obtener_partidos_live_pro():
                 partidos.append(p)
 
     return partidos
+
 
 # ---------------------------------------------------------
 # MODELOS DE PREDICCIÓN (sin estadísticas LIVE)
@@ -89,6 +97,7 @@ def prob_over25_simple(goles_totales, prob_gol_total):
         return round(prob_gol_total * 0.8, 1)
     else:
         return round(prob_gol_total * 0.5, 1)
+
 
 # ---------------------------------------------------------
 # MOSTRAR PARTIDOS EN DIRECTO
@@ -132,6 +141,7 @@ else:
             st.metric("Over 2.5", f"{prob_over25}%")
 
         st.markdown("---")
+
 
 # ---------------------------------------------------------
 # PIE DE PÁGINA
