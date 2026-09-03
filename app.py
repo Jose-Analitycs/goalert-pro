@@ -5,40 +5,30 @@ from datetime import datetime
 import numpy as np
 
 # ---------------------------------------------------------
-# CONFIGURACIÓN DE LA APP
+# CONFIGURACIÓN
 # ---------------------------------------------------------
-st.set_page_config(
-    page_title="GolAlert PRO",
-    page_icon="⚽",
-    layout="wide"
-)
-
-st.title("⚽ GolAlert PRO — Solo Ligas Favoritas (PLAN PRO)")
-st.markdown("Partidos en directo + predicciones (sin estadísticas LIVE).")
+st.set_page_config(page_title="GolAlert PRO", page_icon="⚽", layout="wide")
+st.title("⚽ GolAlert PRO — Ligas Favoritas (HOY + Directos)")
+st.markdown("Partidos de hoy, hora de inicio y predicciones en directo.")
 
 # ---------------------------------------------------------
 # API KEY DESDE SECRETS
 # ---------------------------------------------------------
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 BASE_URL = "https://v3.football.api-sports.io"
+HEADERS = {"x-apisports-key": API_KEY}
 
-HEADERS = {
-    "x-apisports-key": API_KEY
-}
-
-# Comprobación de API KEY
 if not API_KEY:
-    st.error("❌ La API KEY NO se está cargando desde Secrets. Ve a Streamlit Cloud → Secrets.")
+    st.error("❌ La API KEY NO se está cargando desde Secrets.")
 else:
     st.success("✅ API KEY cargada correctamente.")
 
-
 # ---------------------------------------------------------
-# TUS LIGAS FAVORITAS (incluye Championship y Ligue 2)
+# LIGAS FAVORITAS
 # ---------------------------------------------------------
 LIGAS_FAVORITAS = [
-    40,   # Championship (ENG 2)
-    62,   # Ligue 2 (Francia 2)
+    40,   # Championship
+    62,   # Ligue 2
     39,   # Premier League
     140,  # LaLiga
     141,  # Segunda División
@@ -50,100 +40,89 @@ LIGAS_FAVORITAS = [
     144   # Jupiler Pro League
 ]
 
-
 # ---------------------------------------------------------
-# OBTENER PARTIDOS EN DIRECTO (PLAN PRO)
+# PARTIDOS DE HOY (TODOS)
 # ---------------------------------------------------------
-def obtener_partidos_live_pro():
+def obtener_partidos_hoy():
     hoy = datetime.now().strftime("%Y-%m-%d")
     url = f"{BASE_URL}/fixtures?date={hoy}"
     resp = requests.get(url, headers=HEADERS).json()
 
     partidos = []
     for p in resp.get("response", []):
-        liga_id = p["league"]["id"]
-        estado = p["fixture"]["status"]["short"]
-
-        # Solo tus ligas favoritas
-        if liga_id in LIGAS_FAVORITAS:
-            # Solo partidos en directo
-            if estado in ["1H", "HT", "2H", "ET"]:
-                partidos.append(p)
+        if p["league"]["id"] in LIGAS_FAVORITAS:
+            partidos.append(p)
 
     return partidos
 
-
 # ---------------------------------------------------------
-# MODELOS DE PREDICCIÓN (sin estadísticas LIVE)
+# PREDICCIONES SOLO EN DIRECTO
 # ---------------------------------------------------------
-def prob_gol_simple(minuto, goles_totales):
-    base = minuto * 0.8
-    extra = goles_totales * 10
-    prob = np.clip(base + extra, 0, 100)
-    return round(prob, 1)
+def prob_gol(minuto, goles):
+    return round(np.clip(minuto * 0.8 + goles * 10, 0, 100), 1)
 
-def prob_btts_simple(goles_local, goles_visitante, prob_gol_total):
-    if goles_local > 0 and goles_visitante > 0:
+def prob_btts(g1, g2, pg):
+    if g1 > 0 and g2 > 0:
         return 90.0
-    elif goles_local > 0 or goles_visitante > 0:
-        return round(prob_gol_total * 0.6, 1)
-    else:
-        return round(prob_gol_total * 0.4, 1)
+    if g1 > 0 or g2 > 0:
+        return round(pg * 0.6, 1)
+    return round(pg * 0.4, 1)
 
-def prob_over25_simple(goles_totales, prob_gol_total):
-    if goles_totales >= 3:
+def prob_over25(goles, pg):
+    if goles >= 3:
         return 95.0
-    elif goles_totales == 2:
-        return round(prob_gol_total * 0.8, 1)
-    else:
-        return round(prob_gol_total * 0.5, 1)
-
+    if goles == 2:
+        return round(pg * 0.8, 1)
+    return round(pg * 0.5, 1)
 
 # ---------------------------------------------------------
-# MOSTRAR PARTIDOS EN DIRECTO
+# MOSTRAR PARTIDOS DE HOY
 # ---------------------------------------------------------
-st.header("🔴 Partidos EN DIRECTO — Solo Ligas Favoritas")
+st.header("📅 Partidos de HOY — Ligas Favoritas")
 
-partidos_live = obtener_partidos_live_pro()
+partidos_hoy = obtener_partidos_hoy()
 
-if len(partidos_live) == 0:
-    st.warning("No hay partidos en directo en tus ligas favoritas.")
+if not partidos_hoy:
+    st.warning("No hay partidos hoy en tus ligas favoritas.")
 else:
-    for p in partidos_live:
-        fixture = p["fixture"]
-        teams = p["teams"]
-        goals = p["goals"]
+    for p in partidos_hoy:
+        f = p["fixture"]
+        t = p["teams"]
+        g = p["goals"]
 
-        minuto = fixture["status"]["elapsed"] or 0
-        goles_local = goals["home"] or 0
-        goles_visitante = goals["away"] or 0
-        goles_totales = goles_local + goles_visitante
+        # Hora de inicio
+        hora_inicio = f["date"][11:16]
 
-        st.subheader(f"{teams['home']['name']} vs {teams['away']['name']}")
-        st.write(f"🏟 Liga: **{p['league']['name']}**")
-        st.write(f"⏱ Minuto: **{minuto}**")
-        st.write(f"⚽ Marcador: **{goles_local} - {goles_visitante}**")
+        # Estado del partido
+        estado = f["status"]["short"]
+        minuto = f["status"]["elapsed"] or 0
 
-        # Predicciones
-        prob_gol_total = prob_gol_simple(minuto, goles_totales)
-        prob_btts = prob_btts_simple(goles_local, goles_visitante, prob_gol_total)
-        prob_over25 = prob_over25_simple(goles_totales, prob_gol_total)
+        gl = g["home"] or 0
+        gv = g["away"] or 0
+        gt = gl + gv
 
-        col1, col2, col3 = st.columns(3)
+        st.subheader(f"{t['home']['name']} vs {t['away']['name']}")
+        st.write(f"🏟 {p['league']['name']}")
+        st.write(f"🕒 Hora: **{hora_inicio}**")
+        st.write(f"📌 Estado: **{estado}**")
 
-        with col1:
-            st.metric("Prob. gol (próx. min)", f"{prob_gol_total}%")
+        # Si está en directo → mostrar predicciones
+        if estado in ["1H", "HT", "2H", "ET"]:
+            st.write(f"⏱ Minuto: **{minuto}**")
+            st.write(f"⚽ Marcador: **{gl} - {gv}**")
 
-        with col2:
-            st.metric("BTTS", f"{prob_btts}%")
+            pg = prob_gol(minuto, gt)
+            pb = prob_btts(gl, gv, pg)
+            po = prob_over25(gt, pg)
 
-        with col3:
-            st.metric("Over 2.5", f"{prob_over25}%")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Prob. gol", f"{pg}%")
+            c2.metric("BTTS", f"{pb}%")
+            c3.metric("Over 2.5", f"{po}%")
 
         st.markdown("---")
 
-
 # ---------------------------------------------------------
-# PIE DE PÁGINA
+# PIE
 # ---------------------------------------------------------
-st.markdown("Creado por José — GolAlert PRO (Solo Ligas Favoritas, PLAN PRO)")
+st.markdown("Creado por José — GolAlert PRO (HOY + Directos)")
