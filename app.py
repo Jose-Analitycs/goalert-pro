@@ -4,14 +4,19 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import numpy as np
-import time
+from streamlit_autorefresh import st_autorefresh
+
+# ---------------------------------------------------------
+# AUTO‑REFRESCO CADA 60 SEGUNDOS
+# ---------------------------------------------------------
+st_autorefresh(interval=60000, key="refresh")
 
 # ---------------------------------------------------------
 # CONFIGURACIÓN
 # ---------------------------------------------------------
 st.set_page_config(page_title="GolAlert PRO LIVE", page_icon="⚽", layout="wide")
 st.title("⚽ GolAlert PRO LIVE — Ligas Favoritas")
-st.markdown("Partidos de hoy, estadísticas en directo y pronósticos LIVE.")
+st.markdown("Partidos de hoy, hora de inicio, estadísticas en directo y pronósticos LIVE.")
 
 # ---------------------------------------------------------
 # API KEY DESDE SECRETS
@@ -94,12 +99,13 @@ def prob_btts_live(gl, gv, pg):
 def prob_over25_live(goles, pg):
     if goles >= 3:
         return 97.0
+        # Over 2.5 casi seguro
     if goles == 2:
         return round(pg * 0.85, 1)
     return round(pg * 0.45, 1)
 
 # ---------------------------------------------------------
-# MOSTRAR PARTIDOS
+# MOSTRAR PARTIDOS DE HOY
 # ---------------------------------------------------------
 st.header("📅 Partidos de HOY — Ligas Favoritas")
 
@@ -134,11 +140,9 @@ else:
             st.write(f"⏱ Minuto: **{minuto}**")
             st.write(f"⚽ Marcador: **{gl} - {gv}**")
 
-            # Estadísticas LIVE
             stats = obtener_stats_live(fixture_id)
             eventos = obtener_eventos_live(fixture_id)
 
-            # Extraer estadísticas principales
             tiros_totales = 0
             ataques_peligrosos = 0
 
@@ -149,7 +153,6 @@ else:
                     if s["type"] == "Dangerous Attacks":
                         ataques_peligrosos += s["value"] or 0
 
-            # Pronósticos LIVE
             pg = prob_gol_live(minuto, tiros_totales, ataques_peligrosos)
             pb = prob_btts_live(gl, gv, pg)
             po = prob_over25_live(gt, pg)
@@ -159,7 +162,6 @@ else:
             c2.metric("BTTS LIVE", f"{pb}%")
             c3.metric("Over 2.5 LIVE", f"{po}%")
 
-            # Eventos LIVE
             st.write("📢 **Eventos en directo:**")
             for ev in eventos:
                 st.write(f"- {ev['time']['elapsed']}’ — {ev['team']['name']} — {ev['detail']}")
@@ -167,8 +169,6 @@ else:
         st.markdown("---")
 
 # ---------------------------------------------------------
-# AUTO-REFRESCO
+# PIE
 # ---------------------------------------------------------
-st.info("♻️ Actualizando cada 60 segundos…")
-time.sleep(60)
-st.experimental_rerun()
+st.markdown("Creado por José — GolAlert PRO LIVE")
