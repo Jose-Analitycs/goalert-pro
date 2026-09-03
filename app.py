@@ -4,13 +4,14 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import numpy as np
+import time
 
 # ---------------------------------------------------------
 # CONFIGURACIÓN
 # ---------------------------------------------------------
-st.set_page_config(page_title="GolAlert PRO", page_icon="⚽", layout="wide")
-st.title("⚽ GolAlert PRO — Ligas Favoritas (HOY + Directos)")
-st.markdown("Partidos de hoy, hora de inicio y predicciones en directo.")
+st.set_page_config(page_title="GolAlert PRO LIVE", page_icon="⚽", layout="wide")
+st.title("⚽ GolAlert PRO LIVE — Ligas Favoritas")
+st.markdown("Partidos de hoy, estadísticas en directo y pronósticos LIVE.")
 
 # ---------------------------------------------------------
 # API KEY DESDE SECRETS
@@ -21,6 +22,7 @@ HEADERS = {"x-apisports-key": API_KEY}
 
 if not API_KEY:
     st.error("❌ La API KEY NO se está cargando desde Secrets.")
+    st.stop()
 else:
     st.success("✅ API KEY cargada correctamente.")
 
@@ -50,42 +52,54 @@ def convertir_hora_local(fecha_iso):
     return fecha_local.strftime("%H:%M")
 
 # ---------------------------------------------------------
-# PARTIDOS DE HOY (TODOS)
+# PARTIDOS DE HOY
 # ---------------------------------------------------------
 def obtener_partidos_hoy():
     hoy = datetime.now().strftime("%Y-%m-%d")
     url = f"{BASE_URL}/fixtures?date={hoy}"
     resp = requests.get(url, headers=HEADERS).json()
-
-    partidos = []
-    for p in resp.get("response", []):
-        if p["league"]["id"] in LIGAS_FAVORITAS:
-            partidos.append(p)
-
-    return partidos
+    return [p for p in resp.get("response", []) if p["league"]["id"] in LIGAS_FAVORITAS]
 
 # ---------------------------------------------------------
-# PREDICCIONES SOLO EN DIRECTO
+# ESTADÍSTICAS LIVE
 # ---------------------------------------------------------
-def prob_gol(minuto, goles):
-    return round(np.clip(minuto * 0.8 + goles * 10, 0, 100), 1)
+def obtener_stats_live(fixture_id):
+    url = f"{BASE_URL}/fixtures/statistics?fixture={fixture_id}"
+    resp = requests.get(url, headers=HEADERS).json()
+    return resp.get("response", [])
 
-def prob_btts(g1, g2, pg):
-    if g1 > 0 and g2 > 0:
-        return 90.0
-    if g1 > 0 or g2 > 0:
-        return round(pg * 0.6, 1)
-    return round(pg * 0.4, 1)
+# ---------------------------------------------------------
+# EVENTOS LIVE
+# ---------------------------------------------------------
+def obtener_eventos_live(fixture_id):
+    url = f"{BASE_URL}/fixtures/events?fixture={fixture_id}"
+    resp = requests.get(url, headers=HEADERS).json()
+    return resp.get("response", [])
 
-def prob_over25(goles, pg):
+# ---------------------------------------------------------
+# PREDICCIONES LIVE
+# ---------------------------------------------------------
+def prob_gol_live(minuto, tiros_totales, ataques_peligrosos):
+    base = minuto * 0.6
+    extra = tiros_totales * 4 + ataques_peligrosos * 2
+    return round(np.clip(base + extra, 0, 100), 1)
+
+def prob_btts_live(gl, gv, pg):
+    if gl > 0 and gv > 0:
+        return 92.0
+    if gl > 0 or gv > 0:
+        return round(pg * 0.65, 1)
+    return round(pg * 0.35, 1)
+
+def prob_over25_live(goles, pg):
     if goles >= 3:
-        return 95.0
+        return 97.0
     if goles == 2:
-        return round(pg * 0.8, 1)
-    return round(pg * 0.5, 1)
+        return round(pg * 0.85, 1)
+    return round(pg * 0.45, 1)
 
 # ---------------------------------------------------------
-# MOSTRAR PARTIDOS DE HOY
+# MOSTRAR PARTIDOS
 # ---------------------------------------------------------
 st.header("📅 Partidos de HOY — Ligas Favoritas")
 
@@ -99,10 +113,8 @@ else:
         t = p["teams"]
         g = p["goals"]
 
-        # Hora de inicio corregida
+        fixture_id = f["id"]
         hora_inicio = convertir_hora_local(f["date"])
-
-        # Estado del partido
         estado = f["status"]["short"]
         minuto = f["status"]["elapsed"] or 0
 
@@ -115,23 +127,48 @@ else:
         st.write(f"🕒 Hora: **{hora_inicio}**")
         st.write(f"📌 Estado: **{estado}**")
 
-        # Si está en directo → mostrar predicciones
+        # ---------------------------------------------------------
+        # SI ESTÁ EN DIRECTO → MOSTRAR LIVE
+        # ---------------------------------------------------------
         if estado in ["1H", "HT", "2H", "ET"]:
             st.write(f"⏱ Minuto: **{minuto}**")
             st.write(f"⚽ Marcador: **{gl} - {gv}**")
 
-            pg = prob_gol(minuto, gt)
-            pb = prob_btts(gl, gv, pg)
-            po = prob_over25(gt, pg)
+            # Estadísticas LIVE
+            stats = obtener_stats_live(fixture_id)
+            eventos = obtener_eventos_live(fixture_id)
+
+            # Extraer estadísticas principales
+            tiros_totales = 0
+            ataques_peligrosos = 0
+
+            for equipo in stats:
+                for s in equipo["statistics"]:
+                    if s["type"] == "Shots on Goal":
+                        tiros_totales += s["value"] or 0
+                    if s["type"] == "Dangerous Attacks":
+                        ataques_peligrosos += s["value"] or 0
+
+            # Pronósticos LIVE
+            pg = prob_gol_live(minuto, tiros_totales, ataques_peligrosos)
+            pb = prob_btts_live(gl, gv, pg)
+            po = prob_over25_live(gt, pg)
 
             c1, c2, c3 = st.columns(3)
-            c1.metric("Prob. gol", f"{pg}%")
-            c2.metric("BTTS", f"{pb}%")
-            c3.metric("Over 2.5", f"{po}%")
+            c1.metric("Prob. gol LIVE", f"{pg}%")
+            c2.metric("BTTS LIVE", f"{pb}%")
+            c3.metric("Over 2.5 LIVE", f"{po}%")
+
+            # Eventos LIVE
+            st.write("📢 **Eventos en directo:**")
+            for ev in eventos:
+                st.write(f"- {ev['time']['elapsed']}’ — {ev['team']['name']} — {ev['detail']}")
 
         st.markdown("---")
 
 # ---------------------------------------------------------
-# PIE
+# AUTO-REFRESCO
 # ---------------------------------------------------------
-st.markdown("Creado por José — GolAlert PRO (HOY + Directos)")
+st.info("♻️ Actualizando cada 60 segundos…")
+time.sleep(60)
+st.experimental_rerun()
