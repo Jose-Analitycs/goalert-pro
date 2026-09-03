@@ -4,13 +4,17 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import numpy as np
-import time
 
 # ---------------------------------------------------------
-# AUTO‑REFRESCO CADA 60 SEGUNDOS (MÉTODO OFICIAL STREAMLIT CLOUD)
+# AUTO‑REFRESCO CADA 60 SEGUNDOS (MÉTODO COMPATIBLE 2026)
 # ---------------------------------------------------------
-# Truco: cambiamos los query params para forzar recarga sin bloquear la app
-st.experimental_set_query_params(_=datetime.now().timestamp())
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = datetime.now()
+
+# Si han pasado 60 segundos → refrescar
+if (datetime.now() - st.session_state.last_refresh).seconds >= 60:
+    st.session_state.last_refresh = datetime.now()
+    st.experimental_rerun()
 
 # ---------------------------------------------------------
 # CONFIGURACIÓN
@@ -36,17 +40,7 @@ else:
 # LIGAS FAVORITAS
 # ---------------------------------------------------------
 LIGAS_FAVORITAS = [
-    40,   # Championship
-    62,   # Ligue 2
-    39,   # Premier League
-    140,  # LaLiga
-    141,  # Segunda División
-    135,  # Serie A
-    78,   # Bundesliga
-    61,   # Ligue 1
-    94,   # Primeira Liga
-    88,   # Eredivisie
-    144   # Jupiler Pro League
+    40, 62, 39, 140, 141, 135, 78, 61, 94, 88, 144
 ]
 
 # ---------------------------------------------------------
