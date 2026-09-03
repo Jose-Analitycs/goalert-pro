@@ -4,19 +4,20 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import numpy as np
-from streamlit_autorefresh import st_autorefresh
+import time
 
 # ---------------------------------------------------------
-# AUTO‑REFRESCO CADA 60 SEGUNDOS
+# AUTO‑REFRESCO CADA 60 SEGUNDOS (MÉTODO OFICIAL STREAMLIT CLOUD)
 # ---------------------------------------------------------
-st_autorefresh(interval=60000, key="refresh")
+# Truco: cambiamos los query params para forzar recarga sin bloquear la app
+st.experimental_set_query_params(_=datetime.now().timestamp())
 
 # ---------------------------------------------------------
 # CONFIGURACIÓN
 # ---------------------------------------------------------
 st.set_page_config(page_title="GolAlert PRO LIVE", page_icon="⚽", layout="wide")
 st.title("⚽ GolAlert PRO LIVE — Ligas Favoritas")
-st.markdown("Partidos de hoy, hora de inicio, estadísticas en directo y pronósticos LIVE.")
+st.markdown("Partidos de hoy, estadísticas en directo y pronósticos LIVE.")
 
 # ---------------------------------------------------------
 # API KEY DESDE SECRETS
@@ -99,7 +100,6 @@ def prob_btts_live(gl, gv, pg):
 def prob_over25_live(goles, pg):
     if goles >= 3:
         return 97.0
-        # Over 2.5 casi seguro
     if goles == 2:
         return round(pg * 0.85, 1)
     return round(pg * 0.45, 1)
