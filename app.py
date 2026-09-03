@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import numpy as np
 
 # ---------------------------------------------------------
@@ -39,6 +40,14 @@ LIGAS_FAVORITAS = [
     88,   # Eredivisie
     144   # Jupiler Pro League
 ]
+
+# ---------------------------------------------------------
+# CONVERTIR HORA UTC → ESPAÑA
+# ---------------------------------------------------------
+def convertir_hora_local(fecha_iso):
+    fecha = datetime.fromisoformat(fecha_iso.replace("Z", "+00:00"))
+    fecha_local = fecha.astimezone(ZoneInfo("Europe/Madrid"))
+    return fecha_local.strftime("%H:%M")
 
 # ---------------------------------------------------------
 # PARTIDOS DE HOY (TODOS)
@@ -90,8 +99,8 @@ else:
         t = p["teams"]
         g = p["goals"]
 
-        # Hora de inicio
-        hora_inicio = f["date"][11:16]
+        # Hora de inicio corregida
+        hora_inicio = convertir_hora_local(f["date"])
 
         # Estado del partido
         estado = f["status"]["short"]
