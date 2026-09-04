@@ -85,10 +85,7 @@ def parse_stats(stats):
 
         for s in datos:
             tipo = s["type"]
-            val = s["value"]
-
-            if val is None:
-                val = 0
+            val = s["value"] or 0
 
             if tipo == "Shots on Goal":
                 target["shots_on"] = val
@@ -193,9 +190,24 @@ else:
         gt = gl + gv
 
         st.subheader(f"{t['home']['name']} vs {t['away']['name']}")
-        st.write(f"🏟 {p['league']['name']}")
-        st.write(f"🕒 Hora: **{hora_inicio}**")
-        st.write(f"📌 Estado: **{estado}**")
+
+        # ---------------------------------------------------------
+        # ESTADO CON COLORES
+        # ---------------------------------------------------------
+        if estado in ["1H", "HT", "2H", "ET"]:
+            estado_color = "🟩 Partido en directo"
+        elif estado in ["NS", "TBD"]:
+            estado_color = "🟧 Partido por empezar"
+        else:
+            estado_color = "🟥 Partido finalizado"
+
+        # ---------------------------------------------------------
+        # INFO EN UNA SOLA LÍNEA
+        # ---------------------------------------------------------
+        col_info1, col_info2, col_info3 = st.columns([3, 1, 2])
+        col_info1.write(f"🏟 **{p['league']['name']}**")
+        col_info2.write(f"🕒 **{hora_inicio}**")
+        col_info3.write(f"{estado_color}")
 
         # ---------------------------------------------------------
         # LIVE
