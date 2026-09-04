@@ -232,11 +232,11 @@ else:
         # ESTADO CON COLORES
         # ---------------------------------------------------------
         if estado in ["1H", "HT", "2H", "ET"]:
-            estado_color = "🟩 Partido en directo"
+            estado_color = "🟩 En directo"
         elif estado in ["NS", "TBD"]:
-            estado_color = "🟧 Partido por empezar"
+            estado_color = "🟧 Por empezar"
         else:
-            estado_color = "🟥 Partido finalizado"
+            estado_color = "🟥 Finalizado"
 
         # ---------------------------------------------------------
         # INFO EN UNA SOLA LÍNEA (FLEXBOX)
