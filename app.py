@@ -202,12 +202,24 @@ else:
             estado_color = "🟥 Partido finalizado"
 
         # ---------------------------------------------------------
-        # INFO EN UNA SOLA LÍNEA
+        # INFO EN UNA SOLA LÍNEA (HTML)
         # ---------------------------------------------------------
         col_info1, col_info2, col_info3 = st.columns([3, 1, 2])
-        col_info1.write(f"🏟 **{p['league']['name']}**")
-        col_info2.write(f"🕒 **{hora_inicio}**")
-        col_info3.write(f"{estado_color}")
+
+        col_info1.markdown(
+            f"<div style='font-size:18px; font-weight:bold;'>🏟 {p['league']['name']}</div>",
+            unsafe_allow_html=True
+        )
+
+        col_info2.markdown(
+            f"<div style='font-size:18px; font-weight:bold;'>🕒 {hora_inicio}</div>",
+            unsafe_allow_html=True
+        )
+
+        col_info3.markdown(
+            f"<div style='font-size:18px; font-weight:bold;'>{estado_color}</div>",
+            unsafe_allow_html=True
+        )
 
         # ---------------------------------------------------------
         # LIVE
