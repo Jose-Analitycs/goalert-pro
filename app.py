@@ -38,7 +38,20 @@ else:
 # ---------------------------------------------------------
 # LIGAS FAVORITAS
 # ---------------------------------------------------------
-LIGAS_FAVORITAS = [40, 62, 63, 79, 140, 141, 135, 78, 61, 94, 88, 144]
+LIGAS_FAVORITAS = [
+    40,   # Premier League
+    62,   # Championship
+    140,  # LaLiga
+    141,  # Segunda División
+    135,  # Serie A
+    78,   # Bundesliga
+    79,   # Bundesliga 2
+    61,   # Ligue 1
+    63,   # Ligue 2
+    94,   # Primeira Liga
+    88,   # Eredivisie
+    144   # Jupiler Pro League
+]
 
 # ---------------------------------------------------------
 # CONVERTIR HORA UTC → ESPAÑA
@@ -142,28 +155,39 @@ def prob_gol_live(minuto, shots, shots_on, da, poss):
 def prob_btts_live(gl, gv, mh, ma, pg):
     if gl > 0 and gv > 0:
         return 95.0
-
     if gl > 0 and ma > mh:
         return round(pg * 0.85, 1)
-
     if gv > 0 and mh > ma:
         return round(pg * 0.85, 1)
-
     if abs(mh - ma) < 10:
         return round(pg * 0.55, 1)
-
     return round(pg * 0.35, 1)
 
 def prob_over25_live(goles, pg, mh, ma):
     if goles >= 3:
         return 98.0
-
     momentum_total = mh + ma
-
     if goles == 2:
         return round(pg * 0.9 + momentum_total * 0.05, 1)
-
     return round(pg * 0.45 + momentum_total * 0.03, 1)
+
+# ---------------------------------------------------------
+# DETECCIÓN DE MOMENTOS ÓPTIMOS
+# ---------------------------------------------------------
+def detectar_momento_gol(momentum_eq, momentum_rival, prob_gol):
+    if momentum_eq >= 22 and (momentum_eq - momentum_rival) >= 8 and prob_gol >= 55:
+        return "🟩 Momento ideal para entrar al GOL del equipo que domina"
+    return None
+
+def detectar_momento_btts(momentum_home, momentum_away, btts):
+    if momentum_home >= 18 and momentum_away >= 18 and btts >= 55:
+        return "🟧 Partido abierto — buen momento para BTTS"
+    return None
+
+def detectar_momento_over(over25, goles, momentum_total):
+    if over25 >= 60 and goles >= 1 and momentum_total >= 40:
+        return "🟥 Partido caliente — buen momento para entrar al OVER 2.5"
+    return None
 
 # ---------------------------------------------------------
 # MOSTRAR PARTIDOS
@@ -195,14 +219,14 @@ else:
         # ESTADO CON COLORES
         # ---------------------------------------------------------
         if estado in ["1H", "HT", "2H", "ET"]:
-            estado_color = "🟩 En directo"
+            estado_color = "🟩 Partido en directo"
         elif estado in ["NS", "TBD"]:
-            estado_color = "🟧 Por empezar"
+            estado_color = "🟧 Partido por empezar"
         else:
-            estado_color = "🟥 Finalizado"
+            estado_color = "🟥 Partido finalizado"
 
         # ---------------------------------------------------------
-        # INFO EN UNA SOLA LÍNEA (FLEXBOX HTML)
+        # INFO EN UNA SOLA LÍNEA (FLEXBOX)
         # ---------------------------------------------------------
         st.markdown(
             f"""
@@ -253,12 +277,25 @@ else:
             c4.metric("Momentum Local", momentum_home)
             c5.metric("Momentum Visitante", momentum_away)
 
-            if momentum_home > momentum_away:
-                st.success("🔥 El equipo LOCAL domina el partido")
-            elif momentum_away > momentum_home:
-                st.success("🔥 El equipo VISITANTE domina el partido")
-            else:
-                st.info("Partido equilibrado")
+            # ---------------------------------------------------------
+            # MOMENTOS ÓPTIMOS
+            # ---------------------------------------------------------
+            momento_gol_local = detectar_momento_gol(momentum_home, momentum_away, pg)
+            momento_gol_visitante = detectar_momento_gol(momentum_away, momentum_home, pg)
+            momento_btts = detectar_momento_btts(momentum_home, momentum_away, pb)
+            momento_over = detectar_momento_over(po, gt, momentum_home + momentum_away)
+
+            if momento_gol_local:
+                st.success(f"⚽ {momento_gol_local} (LOCAL)")
+
+            if momento_gol_visitante:
+                st.success(f"⚽ {momento_gol_visitante} (VISITANTE)")
+
+            if momento_btts:
+                st.warning(f"🔄 {momento_btts}")
+
+            if momento_over:
+                st.error(f"🔥 {momento_over}")
 
         st.markdown("---")
 
