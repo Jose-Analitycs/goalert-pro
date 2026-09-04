@@ -6,12 +6,11 @@ from zoneinfo import ZoneInfo
 import numpy as np
 
 # ---------------------------------------------------------
-# AUTO‑REFRESCO CADA 60 SEGUNDOS (MÉTODO COMPATIBLE 2026)
+# AUTO‑REFRESCO CADA 60 SEGUNDOS
 # ---------------------------------------------------------
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = datetime.now()
 
-# Si han pasado 60 segundos → refrescar
 if (datetime.now() - st.session_state.last_refresh).seconds >= 60:
     st.session_state.last_refresh = datetime.now()
     st.experimental_rerun()
@@ -24,7 +23,7 @@ st.title("⚽ GolAlert PRO LIVE — Ligas Favoritas")
 st.markdown("Partidos de hoy, estadísticas en directo y pronósticos LIVE.")
 
 # ---------------------------------------------------------
-# API KEY DESDE SECRETS
+# API KEY
 # ---------------------------------------------------------
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 BASE_URL = "https://v3.football.api-sports.io"
@@ -39,9 +38,7 @@ else:
 # ---------------------------------------------------------
 # LIGAS FAVORITAS
 # ---------------------------------------------------------
-LIGAS_FAVORITAS = [
-    40, 62, 39, 140, 141, 135, 78, 61, 94, 88, 144
-]
+LIGAS_FAVORITAS = [40, 62, 39, 140, 141, 135, 78, 61, 94, 88, 144]
 
 # ---------------------------------------------------------
 # CONVERTIR HORA UTC → ESPAÑA
@@ -54,6 +51,7 @@ def convertir_hora_local(fecha_iso):
 # ---------------------------------------------------------
 # PARTIDOS DE HOY
 # ---------------------------------------------------------
+@st.cache_data(ttl=30)
 def obtener_partidos_hoy():
     hoy = datetime.now().strftime("%Y-%m-%d")
     url = f"{BASE_URL}/fixtures?date={hoy}"
@@ -63,43 +61,115 @@ def obtener_partidos_hoy():
 # ---------------------------------------------------------
 # ESTADÍSTICAS LIVE
 # ---------------------------------------------------------
+@st.cache_data(ttl=20)
 def obtener_stats_live(fixture_id):
     url = f"{BASE_URL}/fixtures/statistics?fixture={fixture_id}"
     resp = requests.get(url, headers=HEADERS).json()
     return resp.get("response", [])
 
 # ---------------------------------------------------------
-# EVENTOS LIVE
+# PARSEAR ESTADÍSTICAS POR EQUIPO
 # ---------------------------------------------------------
-def obtener_eventos_live(fixture_id):
-    url = f"{BASE_URL}/fixtures/events?fixture={fixture_id}"
-    resp = requests.get(url, headers=HEADERS).json()
-    return resp.get("response", [])
+def parse_stats(stats):
+    home = {}
+    away = {}
+
+    if not stats:
+        return home, away
+
+    home_id = stats[0]["team"]["id"]
+
+    for equipo in stats:
+        datos = equipo["statistics"]
+        target = home if equipo["team"]["id"] == home_id else away
+
+        for s in datos:
+            tipo = s["type"]
+            val = s["value"]
+
+            if val is None:
+                val = 0
+
+            if tipo == "Shots on Goal":
+                target["shots_on"] = val
+            elif tipo == "Total Shots":
+                target["shots"] = val
+            elif tipo == "Dangerous Attacks":
+                target["dangerous_attacks"] = val
+            elif tipo == "Corner Kicks":
+                target["corners"] = val
+            elif tipo == "expected_goals":
+                target["xg"] = val
+            elif tipo == "Ball Possession":
+                try:
+                    target["possession"] = float(str(val).replace("%", ""))
+                except:
+                    target["possession"] = 0
+
+    return home, away
 
 # ---------------------------------------------------------
-# PREDICCIONES LIVE
+# MOMENTUM POR EQUIPO
 # ---------------------------------------------------------
-def prob_gol_live(minuto, tiros_totales, ataques_peligrosos):
-    base = minuto * 0.6
-    extra = tiros_totales * 4 + ataques_peligrosos * 2
-    return round(np.clip(base + extra, 0, 100), 1)
+def calcular_momentum(stats_equipo):
+    xg = stats_equipo.get("xg", 0)
+    shots = stats_equipo.get("shots", 0)
+    shots_on = stats_equipo.get("shots_on", 0)
+    da = stats_equipo.get("dangerous_attacks", 0)
+    corners = stats_equipo.get("corners", 0)
+    poss = stats_equipo.get("possession", 0)
 
-def prob_btts_live(gl, gv, pg):
+    momentum = (
+        xg * 4 +
+        shots_on * 3 +
+        shots * 1.5 +
+        da * 0.8 +
+        corners * 1.2 +
+        poss * 0.1
+    )
+    return round(momentum, 1)
+
+# ---------------------------------------------------------
+# PROBABILIDADES LIVE
+# ---------------------------------------------------------
+def prob_gol_live(minuto, shots, shots_on, da, poss):
+    score = (
+        minuto * 0.4 +
+        shots * 1.2 +
+        shots_on * 3.5 +
+        da * 0.8 +
+        poss * 0.15
+    )
+    return round(np.clip(score, 0, 100), 1)
+
+def prob_btts_live(gl, gv, mh, ma, pg):
     if gl > 0 and gv > 0:
-        return 92.0
-    if gl > 0 or gv > 0:
-        return round(pg * 0.65, 1)
+        return 95.0
+
+    if gl > 0 and ma > mh:
+        return round(pg * 0.85, 1)
+
+    if gv > 0 and mh > ma:
+        return round(pg * 0.85, 1)
+
+    if abs(mh - ma) < 10:
+        return round(pg * 0.55, 1)
+
     return round(pg * 0.35, 1)
 
-def prob_over25_live(goles, pg):
+def prob_over25_live(goles, pg, mh, ma):
     if goles >= 3:
-        return 97.0
+        return 98.0
+
+    momentum_total = mh + ma
+
     if goles == 2:
-        return round(pg * 0.85, 1)
-    return round(pg * 0.45, 1)
+        return round(pg * 0.9 + momentum_total * 0.05, 1)
+
+    return round(pg * 0.45 + momentum_total * 0.03, 1)
 
 # ---------------------------------------------------------
-# MOSTRAR PARTIDOS DE HOY
+# MOSTRAR PARTIDOS
 # ---------------------------------------------------------
 st.header("📅 Partidos de HOY — Ligas Favoritas")
 
@@ -128,37 +198,42 @@ else:
         st.write(f"📌 Estado: **{estado}**")
 
         # ---------------------------------------------------------
-        # SI ESTÁ EN DIRECTO → MOSTRAR LIVE
+        # LIVE
         # ---------------------------------------------------------
         if estado in ["1H", "HT", "2H", "ET"]:
             st.write(f"⏱ Minuto: **{minuto}**")
             st.write(f"⚽ Marcador: **{gl} - {gv}**")
 
             stats = obtener_stats_live(fixture_id)
-            eventos = obtener_eventos_live(fixture_id)
+            home_stats, away_stats = parse_stats(stats)
 
-            tiros_totales = 0
-            ataques_peligrosos = 0
+            momentum_home = calcular_momentum(home_stats)
+            momentum_away = calcular_momentum(away_stats)
 
-            for equipo in stats:
-                for s in equipo["statistics"]:
-                    if s["type"] == "Shots on Goal":
-                        tiros_totales += s["value"] or 0
-                    if s["type"] == "Dangerous Attacks":
-                        ataques_peligrosos += s["value"] or 0
+            shots = home_stats.get("shots", 0) + away_stats.get("shots", 0)
+            shots_on = home_stats.get("shots_on", 0) + away_stats.get("shots_on", 0)
+            da = home_stats.get("dangerous_attacks", 0) + away_stats.get("dangerous_attacks", 0)
+            poss = (home_stats.get("possession", 0) + away_stats.get("possession", 0)) / 2
 
-            pg = prob_gol_live(minuto, tiros_totales, ataques_peligrosos)
-            pb = prob_btts_live(gl, gv, pg)
-            po = prob_over25_live(gt, pg)
+            pg = prob_gol_live(minuto, shots, shots_on, da, poss)
+            pb = prob_btts_live(gl, gv, momentum_home, momentum_away, pg)
+            po = prob_over25_live(gt, pg, momentum_home, momentum_away)
 
             c1, c2, c3 = st.columns(3)
             c1.metric("Prob. gol LIVE", f"{pg}%")
             c2.metric("BTTS LIVE", f"{pb}%")
             c3.metric("Over 2.5 LIVE", f"{po}%")
 
-            st.write("📢 **Eventos en directo:**")
-            for ev in eventos:
-                st.write(f"- {ev['time']['elapsed']}’ — {ev['team']['name']} — {ev['detail']}")
+            c4, c5 = st.columns(2)
+            c4.metric("Momentum Local", momentum_home)
+            c5.metric("Momentum Visitante", momentum_away)
+
+            if momentum_home > momentum_away:
+                st.success("🔥 El equipo LOCAL domina el partido")
+            elif momentum_away > momentum_home:
+                st.success("🔥 El equipo VISITANTE domina el partido")
+            else:
+                st.info("Partido equilibrado")
 
         st.markdown("---")
 
