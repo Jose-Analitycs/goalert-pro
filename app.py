@@ -39,18 +39,9 @@ else:
 # LIGAS FAVORITAS
 # ---------------------------------------------------------
 LIGAS_FAVORITAS = [
-    40,   # Premier League
-    62,   # Championship
-    140,  # LaLiga
-    141,  # Segunda División
-    135,  # Serie A
-    78,   # Bundesliga
-    79,   # Bundesliga 2
-    61,   # Ligue 1
-    63,   # Ligue 2
-    94,   # Primeira Liga
-    88,   # Eredivisie
-    144   # Jupiler Pro League
+    40, 62, 140, 141, 135,
+    78, 79, 61, 63, 94,
+    88, 144
 ]
 
 # ---------------------------------------------------------
@@ -174,19 +165,41 @@ def prob_over25_live(goles, pg, mh, ma):
 # ---------------------------------------------------------
 # DETECCIÓN DE MOMENTOS ÓPTIMOS
 # ---------------------------------------------------------
-def detectar_momento_gol(momentum_eq, momentum_rival, prob_gol):
-    if momentum_eq >= 22 and (momentum_eq - momentum_rival) >= 8 and prob_gol >= 55:
-        return "🟩 Momento ideal para entrar al GOL del equipo que domina"
+
+# GOL del equipo ANTES del primer gol
+def detectar_momento_gol_pre(momentum_eq, momentum_rival, prob_gol, goles):
+    if goles == 0 and momentum_eq >= 22 and (momentum_eq - momentum_rival) >= 8 and prob_gol >= 55:
+        return "🟩 Partido caliente — buen momento para entrar al GOL del equipo que domina"
     return None
 
-def detectar_momento_btts(momentum_home, momentum_away, btts):
-    if momentum_home >= 18 and momentum_away >= 18 and btts >= 55:
+# GOL del equipo DESPUÉS del primer gol (partido abierto)
+def detectar_momento_gol_post(momentum_eq, momentum_rival, prob_gol, goles):
+    if goles >= 1 and momentum_eq >= 25 and prob_gol >= 60:
+        return "🟩 Partido abierto — buen momento para entrar al GOL del equipo que aprieta"
+    return None
+
+# BTTS ANTES del primer gol
+def detectar_momento_btts_pre(momentum_home, momentum_away, btts, goles):
+    if goles == 0 and momentum_home >= 18 and momentum_away >= 18 and btts >= 55:
         return "🟧 Partido abierto — buen momento para BTTS"
     return None
 
-def detectar_momento_over(over25, goles, momentum_total):
-    if over25 >= 60 and goles >= 1 and momentum_total >= 40:
+# BTTS DESPUÉS del primer gol
+def detectar_momento_btts_post(momentum_home, momentum_away, btts, goles):
+    if goles == 1 and btts >= 60 and momentum_home >= 20 and momentum_away >= 20:
+        return "🟧 Partido caliente — buen momento para BTTS tras el primer gol"
+    return None
+
+# OVER 2.5 ANTES del primer gol
+def detectar_momento_over_pre(over25, goles, momentum_total):
+    if goles == 0 and over25 >= 60 and momentum_total >= 40:
         return "🟥 Partido caliente — buen momento para entrar al OVER 2.5"
+    return None
+
+# OVER 2.5 DESPUÉS del primer gol
+def detectar_momento_over_post(over25, goles, momentum_total):
+    if goles == 1 and over25 >= 65 and momentum_total >= 45:
+        return "🟥 Partido abierto — buen momento para entrar al OVER 2.5 tras el primer gol"
     return None
 
 # ---------------------------------------------------------
@@ -219,11 +232,11 @@ else:
         # ESTADO CON COLORES
         # ---------------------------------------------------------
         if estado in ["1H", "HT", "2H", "ET"]:
-            estado_color = "🟩 En directo"
+            estado_color = "🟩 Partido en directo"
         elif estado in ["NS", "TBD"]:
-            estado_color = "🟧 Por empezar"
+            estado_color = "🟧 Partido por empezar"
         else:
-            estado_color = "🟥 Finalizado"
+            estado_color = "🟥 Partido finalizado"
 
         # ---------------------------------------------------------
         # INFO EN UNA SOLA LÍNEA (FLEXBOX)
@@ -277,25 +290,47 @@ else:
             c4.metric("Momentum Local", momentum_home)
             c5.metric("Momentum Visitante", momentum_away)
 
+            momentum_total = momentum_home + momentum_away
+
             # ---------------------------------------------------------
             # MOMENTOS ÓPTIMOS
             # ---------------------------------------------------------
-            momento_gol_local = detectar_momento_gol(momentum_home, momentum_away, pg)
-            momento_gol_visitante = detectar_momento_gol(momentum_away, momentum_home, pg)
-            momento_btts = detectar_momento_btts(momentum_home, momentum_away, pb)
-            momento_over = detectar_momento_over(po, gt, momentum_home + momentum_away)
 
-            if momento_gol_local:
-                st.success(f"⚽ {momento_gol_local} (LOCAL)")
+            # GOL
+            aviso_gol_local_pre = detectar_momento_gol_pre(momentum_home, momentum_away, pg, gt)
+            aviso_gol_visit_pre = detectar_momento_gol_pre(momentum_away, momentum_home, pg, gt)
 
-            if momento_gol_visitante:
-                st.success(f"⚽ {momento_gol_visitante} (VISITANTE)")
+            aviso_gol_local_post = detectar_momento_gol_post(momentum_home, momentum_away, pg, gt)
+            aviso_gol_visit_post = detectar_momento_gol_post(momentum_away, momentum_home, pg, gt)
 
-            if momento_btts:
-                st.warning(f"🔄 {momento_btts}")
+            # BTTS
+            aviso_btts_pre = detectar_momento_btts_pre(momentum_home, momentum_away, pb, gt)
+            aviso_btts_post = detectar_momento_btts_post(momentum_home, momentum_away, pb, gt)
 
-            if momento_over:
-                st.error(f"🔥 {momento_over}")
+            # OVER
+            aviso_over_pre = detectar_momento_over_pre(po, gt, momentum_total)
+            aviso_over_post = detectar_momento_over_post(po, gt, momentum_total)
+
+            # Mostrar avisos
+            if aviso_gol_local_pre:
+                st.success(f"⚽ {aviso_gol_local_pre} (LOCAL)")
+            if aviso_gol_visit_pre:
+                st.success(f"⚽ {aviso_gol_visit_pre} (VISITANTE)")
+
+            if aviso_gol_local_post:
+                st.success(f"⚽ {aviso_gol_local_post} (LOCAL)")
+            if aviso_gol_visit_post:
+                st.success(f"⚽ {aviso_gol_visit_post} (VISITANTE)")
+
+            if aviso_btts_pre:
+                st.warning(f"🔄 {aviso_btts_pre}")
+            if aviso_btts_post:
+                st.warning(f"🔄 {aviso_btts_post}")
+
+            if aviso_over_pre:
+                st.error(f"🔥 {aviso_over_pre}")
+            if aviso_over_post:
+                st.error(f"🔥 {aviso_over_post}")
 
         st.markdown("---")
 
