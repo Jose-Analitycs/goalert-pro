@@ -181,7 +181,7 @@ def prob_over25_live(goles, pg, mh, ma):
     return round(pg * 0.45 + momentum_total * 0.03, 1)
 
 # ---------------------------------------------------------
-# DETECTORES DE MOMENTOS ÓPTIMOS
+# DETECTORES
 # ---------------------------------------------------------
 def detectar_momento_gol_pre(mh, ma, pg, goles):
     if goles == 0 and pg >= 65 and mh > ma:
@@ -216,7 +216,6 @@ def detectar_momento_over_post(po, goles, momentum_total):
     if goles == 2 and po >= 70:
         return "OVER POST"
     return None
-
 # ---------------------------------------------------------
 # TAB 1 — PARTIDOS EN DIRECTO
 # ---------------------------------------------------------
@@ -292,18 +291,23 @@ with tab1:
                 pb = prob_btts_live(gl, gv, mh, ma, pg)
                 po = prob_over25_live(gt, pg, mh, ma)
 
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Prob. gol LIVE", f"{pg}%")
-                c2.metric("BTTS LIVE", f"{pb}%")
-                c3.metric("Over 2.5 LIVE", f"{po}%")
+                # ---------------------------------------------------------
+                # MÉTRICAS EN DOS FILAS (MEJORADAS)
+                # ---------------------------------------------------------
 
-                c4, c5 = st.columns(2)
-                c4.metric("Momentum Local", mh)
-                c5.metric("Momentum Visitante", ma)
+                # Fila 1 — Probabilidades
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Prob. Gol LIVE", f"{pg}%")
+                col2.metric("BTTS LIVE", f"{pb}%")
+                col3.metric("Over 2.5 LIVE", f"{po}%")
+
+                # Fila 2 — Momentum
+                col4, col5 = st.columns(2)
+                col4.metric("Momentum Local", mh)
+                col5.metric("Momentum Visitante", ma)
 
                 momentum_total = mh + ma
 
-                # Detectores
                 avisos = [
                     detectar_momento_gol_pre(mh, ma, pg, gt),
                     detectar_momento_gol_post(mh, ma, pg, gt),
@@ -326,7 +330,6 @@ with tab1:
                             registrar_aviso(partido_nombre, liga, aviso, minuto, po, gt, resultado_final)
 
             st.markdown("---")
-
 # ---------------------------------------------------------
 # TAB 2 — RENTABILIDAD
 # ---------------------------------------------------------
