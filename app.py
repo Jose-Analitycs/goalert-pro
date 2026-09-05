@@ -283,7 +283,7 @@ with tab1:
                 stats = obtener_stats_live(fixture_id)
                 home_stats, away_stats = parse_stats(stats)
 
-                # Momentum seguro (si la API falla, ponemos 0)
+                # Momentum seguro
                 mh = calcular_momentum(home_stats) if home_stats else 0
                 ma = calcular_momentum(away_stats) if away_stats else 0
 
@@ -306,8 +306,45 @@ with tab1:
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Prob. Gol LIVE", f"{pg}%")
                 col2.metric("BTTS LIVE", f"{pb}%")
-                col3.metric("Over 2.5 LIVE", f"{po
-# ------------------------------------
+                col3.metric("Over 2.5 LIVE", f"{po}%")
+
+                # Fila 2 — Momentum
+                col4, col5 = st.columns(2)
+                col4.metric("Momentum Local", mh)
+                col5.metric("Momentum Visitante", ma)
+
+                momentum_total = mh + ma
+
+                # ---------------------------------------------------------
+                # DETECTORES DE MOMENTOS ÓPTIMOS
+                # ---------------------------------------------------------
+                avisos = [
+                    detectar_momento_gol_pre(mh, ma, pg, gt),
+                    detectar_momento_gol_post(mh, ma, pg, gt),
+                    detectar_momento_btts_pre(mh, ma, pb, gt),
+                    detectar_momento_btts_post(mh, ma, pb, gt),
+                    detectar_momento_over_pre(po, gt, momentum_total),
+                    detectar_momento_over_post(po, gt, momentum_total)
+                ]
+
+                # Mostrar avisos y registrar en CSV
+                for aviso in avisos:
+                    if aviso:
+                        if "GOL" in aviso:
+                            st.success(f"⚽ {aviso} — min {minuto}")
+                            registrar_aviso(partido_nombre, liga, aviso, minuto, pg, gt, resultado_final)
+
+                        elif "BTTS" in aviso:
+                            st.warning(f"🔄 {aviso} — min {minuto}")
+                            registrar_aviso(partido_nombre, liga, aviso, minuto, pb, gt, resultado_final)
+
+                        elif "OVER" in aviso:
+                            st.error(f"🔥 {aviso} — min {minuto}")
+                            registrar_aviso(partido_nombre, liga, aviso, minuto, po, gt, resultado_final)
+
+            st.markdown("---")
+
+# ---------------------------------------------------------
 # TAB 2 — RENTABILIDAD
 # ---------------------------------------------------------
 with tab2:
