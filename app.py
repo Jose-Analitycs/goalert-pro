@@ -216,6 +216,7 @@ def detectar_momento_over_post(po, goles, momentum_total):
     if goles == 2 and po >= 70:
         return "OVER POST"
     return None
+
 # ---------------------------------------------------------
 # TAB 1 — PARTIDOS EN DIRECTO
 # ---------------------------------------------------------
@@ -247,6 +248,7 @@ with tab1:
 
             st.subheader(partido_nombre)
 
+            # Estado del partido
             if estado in ["1H", "HT", "2H", "ET"]:
                 estado_color = "🟩 En directo"
             elif estado in ["NS", "TBD"]:
@@ -254,6 +256,7 @@ with tab1:
             else:
                 estado_color = "🟥 Finalizado"
 
+            # Cabecera del partido
             st.markdown(
                 f"""
                 <div style="
@@ -272,6 +275,7 @@ with tab1:
                 unsafe_allow_html=True
             )
 
+            # Si está en directo, procesamos estadísticas
             if estado in ["1H", "HT", "2H", "ET"]:
                 st.write(f"⏱ Minuto: **{minuto}**")
                 st.write(f"⚽ Marcador: **{gl} - {gv}**")
@@ -279,65 +283,31 @@ with tab1:
                 stats = obtener_stats_live(fixture_id)
                 home_stats, away_stats = parse_stats(stats)
 
-                mh = calcular_momentum(home_stats)
-                ma = calcular_momentum(away_stats)
+                # Momentum seguro (si la API falla, ponemos 0)
+                mh = calcular_momentum(home_stats) if home_stats else 0
+                ma = calcular_momentum(away_stats) if away_stats else 0
 
+                # Datos combinados
                 shots = home_stats.get("shots", 0) + away_stats.get("shots", 0)
                 shots_on = home_stats.get("shots_on", 0) + away_stats.get("shots_on", 0)
                 da = home_stats.get("dangerous_attacks", 0) + away_stats.get("dangerous_attacks", 0)
                 poss = (home_stats.get("possession", 0) + away_stats.get("possession", 0)) / 2
 
+                # Probabilidades
                 pg = prob_gol_live(minuto, shots, shots_on, da, poss)
                 pb = prob_btts_live(gl, gv, mh, ma, pg)
                 po = prob_over25_live(gt, pg, mh, ma)
 
-# ---------------------------------------------------------
-# MÉTRICAS EN DOS FILAS (SIEMPRE ALINEADAS Y SIN FALLOS)
-# ---------------------------------------------------------
+                # ---------------------------------------------------------
+                # MÉTRICAS EN DOS FILAS (SIEMPRE ALINEADAS)
+                # ---------------------------------------------------------
 
-# Momentum seguro (si faltan datos de la API, ponemos 0)
-mh = calcular_momentum(home_stats) if home_stats else 0
-ma = calcular_momentum(away_stats) if away_stats else 0
-
-# Fila 1 — Probabilidades (Gol, BTTS, Over)
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Prob. Gol LIVE", f"{pg}%")
-with col2:
-    st.metric("BTTS LIVE", f"{pb}%")
-with col3:
-    st.metric("Over 2.5 LIVE", f"{po}%")
-
-# Fila 2 — Momentum (Local, Visitante)
-col4, col5 = st.columns(2)
-with col4:
-    st.metric("Momentum Local", mh)
-with col5:
-    st.metric("Momentum Visitante", ma)
-
-                avisos = [
-                    detectar_momento_gol_pre(mh, ma, pg, gt),
-                    detectar_momento_gol_post(mh, ma, pg, gt),
-                    detectar_momento_btts_pre(mh, ma, pb, gt),
-                    detectar_momento_btts_post(mh, ma, pb, gt),
-                    detectar_momento_over_pre(po, gt, momentum_total),
-                    detectar_momento_over_post(po, gt, momentum_total)
-                ]
-
-                for aviso in avisos:
-                    if aviso:
-                        if "GOL" in aviso:
-                            st.success(f"⚽ {aviso} — min {minuto}")
-                            registrar_aviso(partido_nombre, liga, aviso, minuto, pg, gt, resultado_final)
-                        elif "BTTS" in aviso:
-                            st.warning(f"🔄 {aviso} — min {minuto}")
-                            registrar_aviso(partido_nombre, liga, aviso, minuto, pb, gt, resultado_final)
-                        elif "OVER" in aviso:
-                            st.error(f"🔥 {aviso} — min {minuto}")
-                            registrar_aviso(partido_nombre, liga, aviso, minuto, po, gt, resultado_final)
-
-            st.markdown("---")
-# ---------------------------------------------------------
+                # Fila 1 — Probabilidades
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Prob. Gol LIVE", f"{pg}%")
+                col2.metric("BTTS LIVE", f"{pb}%")
+                col3.metric("Over 2.5 LIVE", f"{po
+# ------------------------------------
 # TAB 2 — RENTABILIDAD
 # ---------------------------------------------------------
 with tab2:
