@@ -299,19 +299,43 @@ with tab1:
                 po = prob_over25_live(gt, pg, mh, ma)
 
                 # ---------------------------------------------------------
-                # MÉTRICAS EN DOS FILAS (SIEMPRE ALINEADAS)
+                # MÉTRICAS SIEMPRE ALINEADAS (HTML FLEX)
                 # ---------------------------------------------------------
 
-                # Fila 1 — Probabilidades
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Prob. Gol LIVE", f"{pg}%")
-                col2.metric("BTTS LIVE", f"{pb}%")
-                col3.metric("Over 2.5 LIVE", f"{po}%")
+                st.markdown(
+                    f"""
+                    <div style="
+                        display:flex;
+                        justify-content:space-between;
+                        width:100%;
+                        padding:10px;
+                        font-size:18px;
+                        font-weight:bold;
+                    ">
+                        <div>Prob. Gol LIVE: {pg}%</div>
+                        <div>BTTS LIVE: {pb}%</div>
+                        <div>Over 2.5 LIVE: {po}%</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
-                # Fila 2 — Momentum
-                col4, col5 = st.columns(2)
-                col4.metric("Momentum Local", mh)
-                col5.metric("Momentum Visitante", ma)
+                st.markdown(
+                    f"""
+                    <div style="
+                        display:flex;
+                        justify-content:space-between;
+                        width:100%;
+                        padding:10px;
+                        font-size:18px;
+                        font-weight:bold;
+                    ">
+                        <div>Momentum Local: {mh}</div>
+                        <div>Momentum Visitante: {ma}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
                 momentum_total = mh + ma
 
