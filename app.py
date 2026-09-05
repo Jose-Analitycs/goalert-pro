@@ -46,16 +46,16 @@ else:
 # ---------------------------------------------------------
 LOG_FILE = "avisos_golalert.csv"
 
-# Crear archivo si no existe o si está vacío
+# Crear archivo si no existe o está vacío
 if not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0:
     with open(LOG_FILE, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["partido", "aviso", "minuto", "prob", "goles", "resultado_final"])
+        writer.writerow(["partido", "liga", "aviso", "minuto", "prob", "goles", "resultado_final"])
 
-def registrar_aviso(partido, aviso, minuto, prob, goles, resultado_final):
+def registrar_aviso(partido, liga, aviso, minuto, prob, goles, resultado_final):
     with open(LOG_FILE, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([partido, aviso, minuto, prob, goles, resultado_final])
+        writer.writerow([partido, liga, aviso, minuto, prob, goles, resultado_final])
 
 # ---------------------------------------------------------
 # LIGAS FAVORITAS
@@ -183,7 +183,6 @@ def prob_over25_live(goles, pg, mh, ma):
     if goles == 2:
         return round(pg * 0.9 + momentum_total * 0.05, 1)
     return round(pg * 0.45 + momentum_total * 0.03, 1)
-
 # ---------------------------------------------------------
 # TAB 1 — PARTIDOS EN DIRECTO
 # ---------------------------------------------------------
@@ -209,7 +208,11 @@ with tab1:
             gv = g["away"] or 0
             gt = gl + gv
 
-            st.subheader(f"{t['home']['name']} vs {t['away']['name']}")
+            liga = p["league"]["name"]
+            partido_nombre = f"{t['home']['name']} vs {t['away']['name']}"
+            resultado_final = f"{gl}-{gv}"
+
+            st.subheader(partido_nombre)
 
             # ESTADO CON COLORES
             if estado in ["1H", "HT", "2H", "ET"]:
@@ -230,7 +233,7 @@ with tab1:
                     font-size:18px;
                     font-weight:bold;
                 ">
-                    <div>🏟 {p['league']['name']}</div>
+                    <div>🏟 {liga}</div>
                     <div>🕒 {hora_inicio}</div>
                     <div>{estado_color}</div>
                 </div>
@@ -268,8 +271,6 @@ with tab1:
                 c5.metric("Momentum Visitante", momentum_away)
 
                 momentum_total = momentum_home + momentum_away
-                partido_nombre = f"{t['home']['name']} vs {t['away']['name']}"
-                resultado_final = f"{gl}-{gv}"
 
                 # MOMENTOS ÓPTIMOS
 
@@ -288,38 +289,38 @@ with tab1:
                 aviso_over_pre = detectar_momento_over_pre(po, gt, momentum_total)
                 aviso_over_post = detectar_momento_over_post(po, gt, momentum_total)
 
-                # Mostrar avisos con minuto y registrar
+                # Mostrar avisos con minuto y registrar (incluye liga)
                 if aviso_gol_local_pre:
                     st.success(f"⚽ {aviso_gol_local_pre} (LOCAL) — min {minuto}")
-                    registrar_aviso(partido_nombre, aviso_gol_local_pre, minuto, pg, gt, resultado_final)
+                    registrar_aviso(partido_nombre, liga, aviso_gol_local_pre, minuto, pg, gt, resultado_final)
 
                 if aviso_gol_visit_pre:
                     st.success(f"⚽ {aviso_gol_visit_pre} (VISITANTE) — min {minuto}")
-                    registrar_aviso(partido_nombre, aviso_gol_visit_pre, minuto, pg, gt, resultado_final)
+                    registrar_aviso(partido_nombre, liga, aviso_gol_visit_pre, minuto, pg, gt, resultado_final)
 
                 if aviso_gol_local_post:
                     st.success(f"⚽ {aviso_gol_local_post} (LOCAL) — min {minuto}")
-                    registrar_aviso(partido_nombre, aviso_gol_local_post, minuto, pg, gt, resultado_final)
+                    registrar_aviso(partido_nombre, liga, aviso_gol_local_post, minuto, pg, gt, resultado_final)
 
                 if aviso_gol_visit_post:
                     st.success(f"⚽ {aviso_gol_visit_post} (VISITANTE) — min {minuto}")
-                    registrar_aviso(partido_nombre, aviso_gol_visit_post, minuto, pg, gt, resultado_final)
+                    registrar_aviso(partido_nombre, liga, aviso_gol_visit_post, minuto, pg, gt, resultado_final)
 
                 if aviso_btts_pre:
                     st.warning(f"🔄 {aviso_btts_pre} — min {minuto}")
-                    registrar_aviso(partido_nombre, aviso_btts_pre, minuto, pb, gt, resultado_final)
+                    registrar_aviso(partido_nombre, liga, aviso_btts_pre, minuto, pb, gt, resultado_final)
 
                 if aviso_btts_post:
                     st.warning(f"🔄 {aviso_btts_post} — min {minuto}")
-                    registrar_aviso(partido_nombre, aviso_btts_post, minuto, pb, gt, resultado_final)
+                    registrar_aviso(partido_nombre, liga, aviso_btts_post, minuto, pb, gt, resultado_final)
 
                 if aviso_over_pre:
                     st.error(f"🔥 {aviso_over_pre} — min {minuto}")
-                    registrar_aviso(partido_nombre, aviso_over_pre, minuto, po, gt, resultado_final)
+                    registrar_aviso(partido_nombre, liga, aviso_over_pre, minuto, po, gt, resultado_final)
 
                 if aviso_over_post:
                     st.error(f"🔥 {aviso_over_post} — min {minuto}")
-                    registrar_aviso(partido_nombre, aviso_over_post, minuto, po, gt, resultado_final)
+                    registrar_aviso(partido_nombre, liga, aviso_over_post, minuto, po, gt, resultado_final)
 
             st.markdown("---")
 # ---------------------------------------------------------
@@ -333,8 +334,8 @@ with tab2:
         try:
             df = pd.read_csv(LOG_FILE)
 
-            # Verificar que las columnas existen
-            columnas_necesarias = ["partido", "aviso", "minuto", "prob", "goles", "resultado_final"]
+            # Verificar columnas
+            columnas_necesarias = ["partido", "liga", "aviso", "minuto", "prob", "goles", "resultado_final"]
             if not all(col in df.columns for col in columnas_necesarias):
                 st.error("El archivo de avisos no tiene las columnas correctas. Se regenerará automáticamente.")
                 os.remove(LOG_FILE)
@@ -371,13 +372,13 @@ with tab2:
 
             df["acierto"] = df.apply(es_acierto, axis=1)
 
-            aciertos = df["acierto"].mean() * 100 if len(df) > 0 else 0
+            aciertos_global = df["acierto"].mean() * 100 if len(df) > 0 else 0
 
-            st.subheader("📈 Estadísticas")
-            st.write(f"✔ Aciertos totales: **{aciertos:.2f}%**")
+            st.subheader("📈 Estadísticas globales")
+            st.write(f"✔ Aciertos totales: **{aciertos_global:.2f}%**")
 
             # ---------------------------------------------------------
-            # ROI (1 unidad por aviso)
+            # ROI GLOBAL (1 unidad por aviso)
             # ---------------------------------------------------------
             df["roi"] = df["acierto"].apply(lambda x: 1 if x == 1 else -1)
             roi_total = df["roi"].sum()
@@ -385,7 +386,7 @@ with tab2:
             st.write(f"💰 ROI total (simulado): **{roi_total} unidades**")
 
             # ---------------------------------------------------------
-            # VALUE (probabilidad / 50%)
+            # VALUE GLOBAL (probabilidad / 50%)
             # ---------------------------------------------------------
             df["value"] = df["prob"] / 50
             value_medio = df["value"].mean()
@@ -393,8 +394,52 @@ with tab2:
             st.write(f"🔥 Value medio aproximado: **{value_medio:.2f}**")
 
             # ---------------------------------------------------------
-            # RESUMEN FINAL
+            # RENTABILIDAD POR LIGAS
             # ---------------------------------------------------------
+            st.subheader("🏆 Rentabilidad por ligas")
+
+            ligas = df["liga"].unique()
+            tabla_ligas = []
+
+            for liga in ligas:
+                df_liga = df[df["liga"] == liga]
+
+                aciertos_liga = df_liga["acierto"].mean() * 100 if len(df_liga) > 0 else 0
+                roi_liga = df_liga["roi"].sum()
+
+                tabla_ligas.append([liga, f"{aciertos_liga:.2f}%", roi_liga])
+
+            st.table(pd.DataFrame(tabla_ligas, columns=["Liga", "Acierto", "ROI"]))
+
+            # ---------------------------------------------------------
+            # RENTABILIDAD POR MERCADOS
+            # ---------------------------------------------------------
+            st.subheader("🎯 Rentabilidad por mercados")
+
+            mercados = ["GOL", "BTTS", "OVER"]
+            tabla_mercados = []
+
+            for mercado in mercados:
+                df_m = df[df["aviso"].str.contains(mercado)]
+
+                if len(df_m) > 0:
+                    acierto_m = df_m["acierto"].mean() * 100
+                    roi_m = df_m["roi"].sum()
+                    value_m = df_m["value"].mean()
+                else:
+                    acierto_m = 0
+                    roi_m = 0
+                    value_m = 0
+
+                tabla_mercados.append([
+                    mercado,
+                    f"{acierto_m:.2f}%",
+                    roi_m,
+                    f"{value_m:.2f}"
+                ])
+
+            st.table(pd.DataFrame(tabla_mercados, columns=["Mercado", "Acierto", "ROI", "Value"]))
+
             st.success("Rentabilidad calculada correctamente. Sigue dejando la app abierta para acumular avisos.")
 
         except Exception as e:
