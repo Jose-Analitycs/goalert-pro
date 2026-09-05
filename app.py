@@ -311,28 +311,29 @@ else:
             aviso_over_pre = detectar_momento_over_pre(po, gt, momentum_total)
             aviso_over_post = detectar_momento_over_post(po, gt, momentum_total)
 
-            # Mostrar avisos
+            # Mostrar avisos con minuto incluido
             if aviso_gol_local_pre:
-                st.success(f"⚽ {aviso_gol_local_pre} (LOCAL)")
+                st.success(f"⚽ {aviso_gol_local_pre} (LOCAL) — min {minuto}")
             if aviso_gol_visit_pre:
-                st.success(f"⚽ {aviso_gol_visit_pre} (VISITANTE)")
+                st.success(f"⚽ {aviso_gol_visit_pre} (VISITANTE) — min {minuto}")
 
             if aviso_gol_local_post:
-                st.success(f"⚽ {aviso_gol_local_post} (LOCAL)")
+                st.success(f"⚽ {aviso_gol_local_post} (LOCAL) — min {minuto}")
             if aviso_gol_visit_post:
-                st.success(f"⚽ {aviso_gol_visit_post} (VISITANTE)")
+                st.success(f"⚽ {aviso_gol_visit_post} (VISITANTE) — min {minuto}")
 
             if aviso_btts_pre:
-                st.warning(f"🔄 {aviso_btts_pre}")
+                st.warning(f"🔄 {aviso_btts_pre} — min {minuto}")
             if aviso_btts_post:
-                st.warning(f"🔄 {aviso_btts_post}")
-
+                st.warning(f"🔄 {aviso_btts_post} — min {minuto}")
+ 
             if aviso_over_pre:
-                st.error(f"🔥 {aviso_over_pre}")
+                st.error(f"🔥 {aviso_over_pre} — min {minuto}")
             if aviso_over_post:
-                st.error(f"🔥 {aviso_over_post}")
+                st.error(f"🔥 {aviso_over_post} — min {minuto}")
 
-        st.markdown("---")
+
+            st.markdown("---")
 
 # ---------------------------------------------------------
 # PIE
