@@ -246,6 +246,31 @@ def prob_over25_live(goles, pg, mh, ma):
     if goles == 2:
         return round(pg * 0.9 + momentum_total * 0.05, 1)
     return round(pg * 0.45 + momentum_total * 0.03, 1)
+    
+# ---------------------------------------------------------
+# PREDICCIONES EN TIEMPO REAL (PRE)
+# ---------------------------------------------------------
+
+predicciones = []
+
+# GOL PRE
+if pg >= 55 or mh > ma + 12:
+    predicciones.append(f"⚽ Posible GOL — prob {pg}% — domina {'Local' if mh > ma else 'Visitante'}")
+
+# BTTS PRE
+if mh >= 25 and ma >= 25 and pb >= 45:
+    predicciones.append(f"🔄 Posible BTTS — prob {pb}% — partido abierto")
+
+# OVER PRE
+momentum_total = mh + ma
+if momentum_total >= 45 or po >= 50:
+    predicciones.append(f"🔥 Posible OVER 2.5 — prob {po}% — ritmo alto")
+
+# Mostrar predicciones
+if predicciones:
+    st.info("📡 **Predicciones en tiempo real:**")
+    for p in predicciones:
+        st.write(p)
 
 # ---------------------------------------------------------
 # DETECTORES PRO
