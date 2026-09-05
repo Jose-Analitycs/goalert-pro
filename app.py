@@ -177,43 +177,53 @@ def prob_over25_live(goles, pg, mh, ma):
         return 98.0
     momentum_total = mh + ma
     if goles == 2:
+:
         return round(pg * 0.9 + momentum_total * 0.05, 1)
     return round(pg * 0.45 + momentum_total * 0.03, 1)
 
 # ---------------------------------------------------------
-# DETECTORES
+# DETECTORES PRO (momentos fuertes)
 # ---------------------------------------------------------
 def detectar_momento_gol_pre(mh, ma, pg, goles):
-    if goles == 0 and pg >= 65 and mh > ma:
-        return "GOL PRE (Local)"
-    if goles == 0 and pg >= 65 and ma > mh:
-        return "GOL PRE (Visitante)"
+    if goles == 0:
+        if mh > ma + 15 and pg >= 70:
+            return "GOL PRE (Local)"
+        if ma > mh + 15 and pg >= 70:
+            return "GOL PRE (Visitante)"
+        if abs(mh - ma) < 10 and pg >= 80:
+            return "GOL PRE (Partido caliente)"
     return None
 
 def detectar_momento_gol_post(mh, ma, pg, goles):
-    if goles >= 1 and pg >= 55 and mh > ma:
-        return "GOL POST (Local)"
-    if goles >= 1 and pg >= 55 and ma > mh:
-        return "GOL POST (Visitante)"
+    if goles >= 1:
+        return "GOL POST"
     return None
 
 def detectar_momento_btts_pre(mh, ma, pb, goles):
-    if goles == 0 and pb >= 60 and abs(mh - ma) < 12:
-        return "BTTS PRE"
+    if goles == 0:
+        if mh >= 35 and ma >= 35 and pb >= 70:
+            return "BTTS PRE (Ambos fuertes)"
+        if abs(mh - ma) < 12 and pb >= 75:
+            return "BTTS PRE (Partido caliente)"
     return None
 
 def detectar_momento_btts_post(mh, ma, pb, goles):
     if goles == 1 and pb >= 70:
         return "BTTS POST"
+    if goles >= 2:
+        return "BTTS POST"
     return None
 
 def detectar_momento_over_pre(po, goles, momentum_total):
-    if goles <= 1 and po >= 60 and momentum_total >= 40:
-        return "OVER PRE"
+    if goles <= 1:
+        if momentum_total >= 55 and po >= 70:
+            return "OVER PRE (Partido muy ofensivo)"
+        if momentum_total >= 45 and po >= 80:
+            return "OVER PRE (Caliente)"
     return None
 
 def detectar_momento_over_post(po, goles, momentum_total):
-    if goles == 2 and po >= 70:
+    if goles >= 3:
         return "OVER POST"
     return None
 
@@ -248,7 +258,6 @@ with tab1:
 
             st.subheader(partido_nombre)
 
-            # Estado del partido
             if estado in ["1H", "HT", "2H", "ET"]:
                 estado_color = "🟩 En directo"
             elif estado in ["NS", "TBD"]:
@@ -256,7 +265,6 @@ with tab1:
             else:
                 estado_color = "🟥 Finalizado"
 
-            # Cabecera del partido
             st.markdown(
                 f"""
                 <div style="
@@ -275,7 +283,6 @@ with tab1:
                 unsafe_allow_html=True
             )
 
-            # Si está en directo, procesamos estadísticas
             if estado in ["1H", "HT", "2H", "ET"]:
                 st.write(f"⏱ Minuto: **{minuto}**")
                 st.write(f"⚽ Marcador: **{gl} - {gv}**")
@@ -283,24 +290,17 @@ with tab1:
                 stats = obtener_stats_live(fixture_id)
                 home_stats, away_stats = parse_stats(stats)
 
-                # Momentum seguro
                 mh = calcular_momentum(home_stats) if home_stats else 0
                 ma = calcular_momentum(away_stats) if away_stats else 0
 
-                # Datos combinados
                 shots = home_stats.get("shots", 0) + away_stats.get("shots", 0)
                 shots_on = home_stats.get("shots_on", 0) + away_stats.get("shots_on", 0)
                 da = home_stats.get("dangerous_attacks", 0) + away_stats.get("dangerous_attacks", 0)
                 poss = (home_stats.get("possession", 0) + away_stats.get("possession", 0)) / 2
 
-                # Probabilidades
                 pg = prob_gol_live(minuto, shots, shots_on, da, poss)
                 pb = prob_btts_live(gl, gv, mh, ma, pg)
                 po = prob_over25_live(gt, pg, mh, ma)
-
-                # ---------------------------------------------------------
-                # MÉTRICAS SIEMPRE ALINEADAS (HTML FLEX)
-                # ---------------------------------------------------------
 
                 st.markdown(
                     f"""
@@ -339,9 +339,6 @@ with tab1:
 
                 momentum_total = mh + ma
 
-                # ---------------------------------------------------------
-                # DETECTORES DE MOMENTOS ÓPTIMOS
-                # ---------------------------------------------------------
                 avisos = [
                     detectar_momento_gol_pre(mh, ma, pg, gt),
                     detectar_momento_gol_post(mh, ma, pg, gt),
@@ -351,20 +348,31 @@ with tab1:
                     detectar_momento_over_post(po, gt, momentum_total)
                 ]
 
-                # Mostrar avisos y registrar en CSV
                 for aviso in avisos:
                     if aviso:
                         if "GOL" in aviso:
-                            st.success(f"⚽ {aviso} — min {minuto}")
-                            registrar_aviso(partido_nombre, liga, aviso, minuto, pg, gt, resultado_final)
+                            if "PRE" in aviso:
+                                st.success(f"⚽ {aviso} — min {minuto} — prob {pg}%")
+                                registrar_aviso(partido_nombre, liga, aviso, minuto, pg, gt, resultado_final)
+                            else:
+                                st.success(f"⚽ {aviso} — min {minuto}")
+                                registrar_aviso(partido_nombre, liga, aviso, minuto, "-", gt, resultado_final)
 
                         elif "BTTS" in aviso:
-                            st.warning(f"🔄 {aviso} — min {minuto}")
-                            registrar_aviso(partido_nombre, liga, aviso, minuto, pb, gt, resultado_final)
+                            if "PRE" in aviso:
+                                st.warning(f"🔄 {aviso} — min {minuto} — prob {pb}%")
+                                registrar_aviso(partido_nombre, liga, aviso, minuto, pb, gt, resultado_final)
+                            else:
+                                st.warning(f"🔄 {aviso} — min {minuto}")
+                                registrar_aviso(partido_nombre, liga, aviso, minuto, "-", gt, resultado_final)
 
                         elif "OVER" in aviso:
-                            st.error(f"🔥 {aviso} — min {minuto}")
-                            registrar_aviso(partido_nombre, liga, aviso, minuto, po, gt, resultado_final)
+                            if "PRE" in aviso:
+                                st.error(f"🔥 {aviso} — min {minuto} — prob {po}%")
+                                registrar_aviso(partido_nombre, liga, aviso, minuto, po, gt, resultado_final)
+                            else:
+                                st.error(f"🔥 {aviso} — min {minuto}")
+                                registrar_aviso(partido_nombre, liga, aviso, minuto, "-", gt, resultado_final)
 
             st.markdown("---")
 
@@ -404,7 +412,7 @@ with tab2:
 
         df["acierto"] = df.apply(es_acierto, axis=1)
         df["roi"] = df["acierto"].apply(lambda x: 1 if x == 1 else -1)
-        df["value"] = df["prob"] / 50
+        df["value"] = df["prob"].apply(lambda p: 0 if p == "-" else float(p) / 50)
 
         st.subheader("📈 Estadísticas globales")
         st.write(f"✔ Aciertos totales: **{df['acierto'].mean()*100:.2f}%**")
@@ -444,6 +452,5 @@ with tab2:
         st.table(pd.DataFrame(tabla_mercados, columns=["Mercado", "Acierto", "ROI", "Value"]))
 
         st.success("Rentabilidad calculada correctamente.")
-
     else:
         st.info("Todavía no hay avisos registrados. Deja la app funcionando y vuelve más tarde.")
