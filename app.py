@@ -23,7 +23,9 @@ if (datetime.now() - st.session_state.last_refresh).seconds >= 60:
 st.set_page_config(page_title="GolAlert PRO LIVE", page_icon="⚽", layout="wide")
 st.title("⚽ GolAlert PRO LIVE — Ligas Favoritas")
 
+# ---------------------------------------------------------
 # PESTAÑAS
+# ---------------------------------------------------------
 tab1, tab2 = st.tabs(["📡 Partidos en directo", "📊 Rentabilidad"])
 
 # ---------------------------------------------------------
@@ -37,14 +39,15 @@ if not API_KEY:
     st.error("❌ La API KEY NO se está cargando desde Secrets.")
     st.stop()
 else:
-    st.success("✅ API KEY cargada correctamente.")
+    st.success("API KEY cargada correctamente.")
 
 # ---------------------------------------------------------
 # ARCHIVO DE LOG
 # ---------------------------------------------------------
 LOG_FILE = "avisos_golalert.csv"
 
-if not os.path.exists(LOG_FILE):
+# Crear archivo si no existe o si está vacío
+if not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0:
     with open(LOG_FILE, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["partido", "aviso", "minuto", "prob", "goles", "resultado_final"])
@@ -180,46 +183,6 @@ def prob_over25_live(goles, pg, mh, ma):
     if goles == 2:
         return round(pg * 0.9 + momentum_total * 0.05, 1)
     return round(pg * 0.45 + momentum_total * 0.03, 1)
-
-# ---------------------------------------------------------
-# DETECCIÓN DE MOMENTOS ÓPTIMOS
-# ---------------------------------------------------------
-
-# GOL del equipo ANTES del primer gol
-def detectar_momento_gol_pre(momentum_eq, momentum_rival, prob_gol, goles):
-    if goles == 0 and momentum_eq >= 22 and (momentum_eq - momentum_rival) >= 8 and prob_gol >= 55:
-        return "🟩 Partido caliente — buen momento para entrar al GOL del equipo que domina"
-    return None
-
-# GOL del equipo DESPUÉS del primer gol (partido abierto)
-def detectar_momento_gol_post(momentum_eq, momentum_rival, prob_gol, goles):
-    if goles >= 1 and momentum_eq >= 25 and prob_gol >= 60:
-        return "🟩 Partido abierto — buen momento para entrar al GOL del equipo que aprieta"
-    return None
-
-# BTTS ANTES del primer gol
-def detectar_momento_btts_pre(momentum_home, momentum_away, btts, goles):
-    if goles == 0 and momentum_home >= 18 and momentum_away >= 18 and btts >= 55:
-        return "🟧 Partido abierto — buen momento para BTTS"
-    return None
-
-# BTTS DESPUÉS del primer gol
-def detectar_momento_btts_post(momentum_home, momentum_away, btts, goles):
-    if goles == 1 and btts >= 60 and momentum_home >= 20 and momentum_away >= 20:
-        return "🟧 Partido caliente — buen momento para BTTS tras el primer gol"
-    return None
-
-# OVER 2.5 ANTES del primer gol
-def detectar_momento_over_pre(over25, goles, momentum_total):
-    if goles == 0 and over25 >= 60 and momentum_total >= 40:
-        return "🟥 Partido caliente — buen momento para entrar al OVER 2.5"
-    return None
-
-# OVER 2.5 DESPUÉS del primer gol
-def detectar_momento_over_post(over25, goles, momentum_total):
-    if goles == 1 and over25 >= 65 and momentum_total >= 45:
-        return "🟥 Partido abierto — buen momento para entrar al OVER 2.5 tras el primer gol"
-    return None
 
 # ---------------------------------------------------------
 # TAB 1 — PARTIDOS EN DIRECTO
@@ -359,54 +322,84 @@ with tab1:
                     registrar_aviso(partido_nombre, aviso_over_post, minuto, po, gt, resultado_final)
 
             st.markdown("---")
-
 # ---------------------------------------------------------
 # TAB 2 — RENTABILIDAD
 # ---------------------------------------------------------
 with tab2:
     st.header("📊 Rentabilidad GolAlert PRO")
 
-    if os.path.exists(LOG_FILE):
-        df = pd.read_csv(LOG_FILE)
+    # Si el archivo existe y tiene contenido
+    if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 0:
+        try:
+            df = pd.read_csv(LOG_FILE)
 
-        st.subheader("📑 Historial de avisos")
-        st.dataframe(df)
+            # Verificar que las columnas existen
+            columnas_necesarias = ["partido", "aviso", "minuto", "prob", "goles", "resultado_final"]
+            if not all(col in df.columns for col in columnas_necesarias):
+                st.error("El archivo de avisos no tiene las columnas correctas. Se regenerará automáticamente.")
+                os.remove(LOG_FILE)
+                st.stop()
 
-        # Cálculo de aciertos
-        def es_acierto(row):
-            goles_local, goles_visit = map(int, row["resultado_final"].split("-"))
-            total_goles = goles_local + goles_visit
+            st.subheader("📑 Historial de avisos")
+            st.dataframe(df)
 
-            aviso = row["aviso"]
+            # ---------------------------------------------------------
+            # CÁLCULO DE ACIERTOS
+            # ---------------------------------------------------------
+            def es_acierto(row):
+                try:
+                    goles_local, goles_visit = map(int, row["resultado_final"].split("-"))
+                    total_goles = goles_local + goles_visit
+                except:
+                    return 0
 
-            if "GOL" in aviso:
-                return 1 if row["goles"] > 0 else 0
-            if "BTTS" in aviso:
-                return 1 if (goles_local > 0 and goles_visit > 0) else 0
-            if "OVER" in aviso:
-                return 1 if total_goles >= 3 else 0
-            return 0
+                aviso = row["aviso"]
 
-        df["acierto"] = df.apply(es_acierto, axis=1)
-        aciertos = df["acierto"].mean() * 100 if len(df) > 0 else 0
+                # Acierto GOL
+                if "GOL" in aviso:
+                    return 1 if row["goles"] > 0 else 0
 
-        st.subheader("📈 Estadísticas")
-        st.write(f"✔ Aciertos totales: {aciertos:.2f}%")
+                # Acierto BTTS
+                if "BTTS" in aviso:
+                    return 1 if (goles_local > 0 and goles_visit > 0) else 0
 
-        # ROI simulado (apuesta fija 1 unidad)
-        df["roi"] = df["acierto"].apply(lambda x: 1 if x == 1 else -1)
-        roi_total = df["roi"].sum()
+                # Acierto OVER
+                if "OVER" in aviso:
+                    return 1 if total_goles >= 3 else 0
 
-        st.write(f"💰 ROI total (simulado, 1 unidad por aviso): {roi_total} unidades")
+                return 0
 
-        # Value medio (aprox: prob / 50%)
-        df["value"] = df["prob"] / 50
-        st.write(f"🔥 Value medio aproximado: {df['value'].mean():.2f}")
+            df["acierto"] = df.apply(es_acierto, axis=1)
+
+            aciertos = df["acierto"].mean() * 100 if len(df) > 0 else 0
+
+            st.subheader("📈 Estadísticas")
+            st.write(f"✔ Aciertos totales: **{aciertos:.2f}%**")
+
+            # ---------------------------------------------------------
+            # ROI (1 unidad por aviso)
+            # ---------------------------------------------------------
+            df["roi"] = df["acierto"].apply(lambda x: 1 if x == 1 else -1)
+            roi_total = df["roi"].sum()
+
+            st.write(f"💰 ROI total (simulado): **{roi_total} unidades**")
+
+            # ---------------------------------------------------------
+            # VALUE (probabilidad / 50%)
+            # ---------------------------------------------------------
+            df["value"] = df["prob"] / 50
+            value_medio = df["value"].mean()
+
+            st.write(f"🔥 Value medio aproximado: **{value_medio:.2f}**")
+
+            # ---------------------------------------------------------
+            # RESUMEN FINAL
+            # ---------------------------------------------------------
+            st.success("Rentabilidad calculada correctamente. Sigue dejando la app abierta para acumular avisos.")
+
+        except Exception as e:
+            st.error("⚠ Error leyendo el archivo de avisos. Se regenerará automáticamente.")
+            os.remove(LOG_FILE)
 
     else:
         st.info("Todavía no hay avisos registrados. Deja la app funcionando y vuelve más tarde a esta pestaña.")
-
-# ---------------------------------------------------------
-# PIE
-# ---------------------------------------------------------
-st.markdown("Creado por José — GolAlert PRO LIVE")
