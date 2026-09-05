@@ -291,22 +291,29 @@ with tab1:
                 pb = prob_btts_live(gl, gv, mh, ma, pg)
                 po = prob_over25_live(gt, pg, mh, ma)
 
-                # ---------------------------------------------------------
-                # MÉTRICAS EN DOS FILAS (MEJORADAS)
-                # ---------------------------------------------------------
+# ---------------------------------------------------------
+# MÉTRICAS EN DOS FILAS (SIEMPRE ALINEADAS Y SIN FALLOS)
+# ---------------------------------------------------------
 
-                # Fila 1 — Probabilidades
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Prob. Gol LIVE", f"{pg}%")
-                col2.metric("BTTS LIVE", f"{pb}%")
-                col3.metric("Over 2.5 LIVE", f"{po}%")
+# Momentum seguro (si faltan datos de la API, ponemos 0)
+mh = calcular_momentum(home_stats) if home_stats else 0
+ma = calcular_momentum(away_stats) if away_stats else 0
 
-                # Fila 2 — Momentum
-                col4, col5 = st.columns(2)
-                col4.metric("Momentum Local", mh)
-                col5.metric("Momentum Visitante", ma)
+# Fila 1 — Probabilidades (Gol, BTTS, Over)
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Prob. Gol LIVE", f"{pg}%")
+with col2:
+    st.metric("BTTS LIVE", f"{pb}%")
+with col3:
+    st.metric("Over 2.5 LIVE", f"{po}%")
 
-                momentum_total = mh + ma
+# Fila 2 — Momentum (Local, Visitante)
+col4, col5 = st.columns(2)
+with col4:
+    st.metric("Momentum Local", mh)
+with col5:
+    st.metric("Momentum Visitante", ma)
 
                 avisos = [
                     detectar_momento_gol_pre(mh, ma, pg, gt),
