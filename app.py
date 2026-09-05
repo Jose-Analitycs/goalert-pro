@@ -225,99 +225,6 @@ def prob_gol_hibrida(minuto, stats_equipo, eventos_equipo):
     shots_on = stats_eventos["shots_on"]
     da = stats_eventos["dangerous_attacks"]
     poss = stats_eventos["possession"]
-
-    return prob_gol_live(minuto, shots, shots_on, da, poss)
-
-def prob_btts_live(gl, gv, mh, ma, pg):
-    if gl > 0 and gv > 0:
-        return 95.0
-    if gl > 0 and ma > mh:
-        return round(pg * 0.85, 1)
-    if gv > 0 and mh > ma:
-        return round(pg * 0.85, 1)
-    if abs(mh - ma) < 10:
-        return round(pg * 0.55, 1)
-    return round(pg * 0.35, 1)
-
-def prob_over25_live(goles, pg, mh, ma):
-    if goles >= 3:
-        return 98.0
-    momentum_total = mh + ma
-    if goles == 2:
-        return round(pg * 0.9 + momentum_total * 0.05, 1)
-    return round(pg * 0.45 + momentum_total * 0.03, 1)
-    
-# ---------------------------------------------------------
-# PREDICCIONES EN TIEMPO REAL (PRE)
-# ---------------------------------------------------------
-
-predicciones = []
-
-# GOL PRE
-if pg >= 55 or mh > ma + 12:
-    predicciones.append(f"⚽ Posible GOL — prob {pg}% — domina {'Local' if mh > ma else 'Visitante'}")
-
-# BTTS PRE
-if mh >= 25 and ma >= 25 and pb >= 45:
-    predicciones.append(f"🔄 Posible BTTS — prob {pb}% — partido abierto")
-
-# OVER PRE
-momentum_total = mh + ma
-if momentum_total >= 45 or po >= 50:
-    predicciones.append(f"🔥 Posible OVER 2.5 — prob {po}% — ritmo alto")
-
-# Mostrar predicciones
-if predicciones:
-    st.info("📡 **Predicciones en tiempo real:**")
-    for p in predicciones:
-        st.write(p)
-
-# ---------------------------------------------------------
-# DETECTORES PRO
-# ---------------------------------------------------------
-def detectar_momento_gol_pre(mh, ma, pg, goles):
-    if goles == 0:
-        if mh > ma + 15 and pg >= 70:
-            return "GOL PRE (Local)"
-        if ma > mh + 15 and pg >= 70:
-            return "GOL PRE (Visitante)"
-        if abs(mh - ma) < 10 and pg >= 80:
-            return "GOL PRE (Partido caliente)"
-    return None
-
-def detectar_momento_gol_post(mh, ma, pg, goles):
-    if goles >= 1:
-        return "GOL POST"
-    return None
-
-def detectar_momento_btts_pre(mh, ma, pb, goles):
-    if goles == 0:
-        if mh >= 35 and ma >= 35 and pb >= 70:
-            return "BTTS PRE (Ambos fuertes)"
-        if abs(mh - ma) < 12 and pb >= 75:
-            return "BTTS PRE (Partido caliente)"
-    return None
-
-def detectar_momento_btts_post(mh, ma, pb, goles):
-    if goles == 1 and pb >= 70:
-        return "BTTS POST"
-    if goles >= 2:
-        return "BTTS POST"
-    return None
-
-def detectar_momento_over_pre(po, goles, momentum_total):
-    if goles <= 1:
-        if momentum_total >= 55 and po >= 70:
-            return "OVER PRE (Partido muy ofensivo)"
-        if momentum_total >= 45 and po >= 80:
-            return "OVER PRE (Caliente)"
-    return None
-
-def detectar_momento_over_post(po, goles, momentum_total):
-    if goles >= 3:
-        return "OVER POST"
-    return None
-
 # ---------------------------------------------------------
 # TAB 1 — PARTIDOS EN DIRECTO
 # ---------------------------------------------------------
@@ -378,20 +285,55 @@ with tab1:
                 st.write(f"⏱ Minuto: **{minuto}**")
                 st.write(f"⚽ Marcador: **{gl} - {gv}**")
 
+                # Estadísticas
                 stats = obtener_stats_live(fixture_id)
                 home_stats, away_stats = parse_stats(stats)
 
+                # Eventos
                 eventos = obtener_eventos(fixture_id)
                 eventos_local = [e for e in eventos if e["team"]["id"] == t["home"]["id"]]
                 eventos_visitante = [e for e in eventos if e["team"]["id"] == t["away"]["id"]]
 
+                # Momentum híbrido
                 mh = momentum_hibrido(home_stats, eventos_local)
                 ma = momentum_hibrido(away_stats, eventos_visitante)
 
+                # Probabilidades híbridas
                 pg = prob_gol_hibrida(minuto, home_stats, eventos_local)
                 pb = prob_btts_live(gl, gv, mh, ma, pg)
                 po = prob_over25_live(gt, pg, mh, ma)
 
+                # ---------------------------------------------------------
+                # PREDICCIONES EN TIEMPO REAL (PRE)
+                # ---------------------------------------------------------
+                predicciones = []
+
+                # GOL PRE
+                if pg >= 55 or mh > ma + 12:
+                    predicciones.append(
+                        f"⚽ Posible GOL — prob {pg}% — domina {'Local' if mh > ma else 'Visitante'}"
+                    )
+
+                # BTTS PRE
+                if mh >= 25 and ma >= 25 and pb >= 45:
+                    predicciones.append(
+                        f"🔄 Posible BTTS — prob {pb}% — partido abierto"
+                    )
+
+                # OVER PRE
+                momentum_total = mh + ma
+                if momentum_total >= 45 or po >= 50:
+                    predicciones.append(
+                        f"🔥 Posible OVER 2.5 — prob {po}% — ritmo alto"
+                    )
+
+                # Mostrar predicciones
+                if predicciones:
+                    st.info("📡 **Predicciones en tiempo real:**")
+                    for ptxt in predicciones:
+                        st.write(ptxt)
+
+                # Mostrar probabilidades
                 st.markdown(
                     f"""
                     <div style="
@@ -410,6 +352,7 @@ with tab1:
                     unsafe_allow_html=True
                 )
 
+                # Mostrar momentum
                 st.markdown(
                     f"""
                     <div style="
@@ -427,8 +370,9 @@ with tab1:
                     unsafe_allow_html=True
                 )
 
-                momentum_total = mh + ma
-
+                # ---------------------------------------------------------
+                # DETECTORES PRO (PRE/POST)
+                # ---------------------------------------------------------
                 avisos = [
                     detectar_momento_gol_pre(mh, ma, pg, gt),
                     detectar_momento_gol_post(mh, ma, pg, gt),
@@ -438,6 +382,7 @@ with tab1:
                     detectar_momento_over_post(po, gt, momentum_total)
                 ]
 
+                # Mostrar avisos PRO
                 for aviso in avisos:
                     if aviso:
                         if "GOL" in aviso:
@@ -469,7 +414,6 @@ with tab1:
                                 registrar_aviso(partido_nombre, liga, aviso, minuto, "-", gt, resultado_final)
 
             st.markdown("---")
-
 # ---------------------------------------------------------
 # TAB 2 — RENTABILIDAD
 # ---------------------------------------------------------
@@ -487,6 +431,9 @@ with tab2:
         st.subheader("📑 Historial de avisos")
         st.dataframe(df)
 
+        # ---------------------------------------------------------
+        # CÁLCULO DE ACIERTOS
+        # ---------------------------------------------------------
         def es_acierto(row):
             try:
                 gl, gv = map(int, row["resultado_final"].split("-"))
@@ -498,22 +445,37 @@ with tab2:
 
             if "GOL" in aviso:
                 return 1 if row["goles"] > 0 else 0
+
             if "BTTS" in aviso:
                 return 1 if gl > 0 and gv > 0 else 0
+
             if "OVER" in aviso:
                 return 1 if total >= 3 else 0
+
             return 0
 
         df["acierto"] = df.apply(es_acierto, axis=1)
+
+        # ROI simple: +1 si acierto, -1 si fallo
         df["roi"] = df["acierto"].apply(lambda x: 1 if x == 1 else -1)
+
+        # Value basado en probabilidad
         df["value"] = df["prob"].apply(lambda p: 0 if p == "-" else float(p) / 50)
 
+        # ---------------------------------------------------------
+        # ESTADÍSTICAS GLOBALES
+        # ---------------------------------------------------------
         st.subheader("📈 Estadísticas globales")
+
         st.write(f"✔ Aciertos totales: **{df['acierto'].mean()*100:.2f}%**")
         st.write(f"💰 ROI total: **{df['roi'].sum()} unidades**")
         st.write(f"🔥 Value medio: **{df['value'].mean():.2f}**")
 
+        # ---------------------------------------------------------
+        # RENTABILIDAD POR LIGAS
+        # ---------------------------------------------------------
         st.subheader("🏆 Rentabilidad por ligas")
+
         ligas = df["liga"].unique()
         tabla_ligas = []
 
@@ -527,7 +489,11 @@ with tab2:
 
         st.table(pd.DataFrame(tabla_ligas, columns=["Liga", "Acierto", "ROI"]))
 
+        # ---------------------------------------------------------
+        # RENTABILIDAD POR MERCADOS
+        # ---------------------------------------------------------
         st.subheader("🎯 Rentabilidad por mercados")
+
         mercados = ["GOL", "BTTS", "OVER"]
         tabla_mercados = []
 
@@ -548,3 +514,5 @@ with tab2:
         st.success("Rentabilidad calculada correctamente.")
     else:
         st.info("Todavía no hay avisos registrados. Deja la app funcionando y vuelve más tarde.")
+
+    return prob_gol_live(minuto, shots, shots_on, da, poss)
