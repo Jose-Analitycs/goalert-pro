@@ -225,6 +225,8 @@ def prob_gol_hibrida(minuto, stats_equipo, eventos_equipo):
     shots_on = stats_eventos["shots_on"]
     da = stats_eventos["dangerous_attacks"]
     poss = stats_eventos["possession"]
+    
+    return prob_gol_live(minuto, shots, shots_on, da, poss)
 # ---------------------------------------------------------
 # TAB 1 — PARTIDOS EN DIRECTO
 # ---------------------------------------------------------
@@ -515,4 +517,3 @@ with tab2:
     else:
         st.info("Todavía no hay avisos registrados. Deja la app funcionando y vuelve más tarde.")
 
-    return prob_gol_live(minuto, shots, shots_on, da, poss)
