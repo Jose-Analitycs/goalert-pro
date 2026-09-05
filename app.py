@@ -4,6 +4,8 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import numpy as np
+import csv
+import pandas as pd
 
 # ---------------------------------------------------------
 # AUTO‑REFRESCO CADA 60 SEGUNDOS
@@ -20,7 +22,9 @@ if (datetime.now() - st.session_state.last_refresh).seconds >= 60:
 # ---------------------------------------------------------
 st.set_page_config(page_title="GolAlert PRO LIVE", page_icon="⚽", layout="wide")
 st.title("⚽ GolAlert PRO LIVE — Ligas Favoritas")
-st.markdown("Partidos de hoy, estadísticas en directo y pronósticos LIVE.")
+
+# PESTAÑAS
+tab1, tab2 = st.tabs(["📡 Partidos en directo", "📊 Rentabilidad"])
 
 # ---------------------------------------------------------
 # API KEY
@@ -34,6 +38,21 @@ if not API_KEY:
     st.stop()
 else:
     st.success("✅ API KEY cargada correctamente.")
+
+# ---------------------------------------------------------
+# ARCHIVO DE LOG
+# ---------------------------------------------------------
+LOG_FILE = "avisos_golalert.csv"
+
+if not os.path.exists(LOG_FILE):
+    with open(LOG_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["partido", "aviso", "minuto", "prob", "goles", "resultado_final"])
+
+def registrar_aviso(partido, aviso, minuto, prob, goles, resultado_final):
+    with open(LOG_FILE, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([partido, aviso, minuto, prob, goles, resultado_final])
 
 # ---------------------------------------------------------
 # LIGAS FAVORITAS
@@ -203,137 +222,189 @@ def detectar_momento_over_post(over25, goles, momentum_total):
     return None
 
 # ---------------------------------------------------------
-# MOSTRAR PARTIDOS
+# TAB 1 — PARTIDOS EN DIRECTO
 # ---------------------------------------------------------
-st.header("📅 Partidos de HOY — Ligas Favoritas")
+with tab1:
+    st.header("📅 Partidos de HOY — Ligas Favoritas")
 
-partidos_hoy = obtener_partidos_hoy()
+    partidos_hoy = obtener_partidos_hoy()
 
-if not partidos_hoy:
-    st.warning("No hay partidos hoy en tus ligas favoritas.")
-else:
-    for p in partidos_hoy:
-        f = p["fixture"]
-        t = p["teams"]
-        g = p["goals"]
+    if not partidos_hoy:
+        st.warning("No hay partidos hoy en tus ligas favoritas.")
+    else:
+        for p in partidos_hoy:
+            f = p["fixture"]
+            t = p["teams"]
+            g = p["goals"]
 
-        fixture_id = f["id"]
-        hora_inicio = convertir_hora_local(f["date"])
-        estado = f["status"]["short"]
-        minuto = f["status"]["elapsed"] or 0
+            fixture_id = f["id"]
+            hora_inicio = convertir_hora_local(f["date"])
+            estado = f["status"]["short"]
+            minuto = f["status"]["elapsed"] or 0
 
-        gl = g["home"] or 0
-        gv = g["away"] or 0
-        gt = gl + gv
+            gl = g["home"] or 0
+            gv = g["away"] or 0
+            gt = gl + gv
 
-        st.subheader(f"{t['home']['name']} vs {t['away']['name']}")
+            st.subheader(f"{t['home']['name']} vs {t['away']['name']}")
 
-        # ---------------------------------------------------------
-        # ESTADO CON COLORES
-        # ---------------------------------------------------------
-        if estado in ["1H", "HT", "2H", "ET"]:
-            estado_color = "🟩 En directo"
-        elif estado in ["NS", "TBD"]:
-            estado_color = "🟧 Por empezar"
-        else:
-            estado_color = "🟥 Finalizado"
+            # ESTADO CON COLORES
+            if estado in ["1H", "HT", "2H", "ET"]:
+                estado_color = "🟩 En directo"
+            elif estado in ["NS", "TBD"]:
+                estado_color = "🟧 Por empezar"
+            else:
+                estado_color = "🟥 Finalizado"
 
-        # ---------------------------------------------------------
-        # INFO EN UNA SOLA LÍNEA (FLEXBOX)
-        # ---------------------------------------------------------
-        st.markdown(
-            f"""
-            <div style="
-                display:flex;
-                justify-content:space-between;
-                align-items:center;
-                padding:8px 12px;
-                font-size:18px;
-                font-weight:bold;
-            ">
-                <div>🏟 {p['league']['name']}</div>
-                <div>🕒 {hora_inicio}</div>
-                <div>{estado_color}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+            # INFO EN UNA SOLA LÍNEA (FLEXBOX)
+            st.markdown(
+                f"""
+                <div style="
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    padding:8px 12px;
+                    font-size:18px;
+                    font-weight:bold;
+                ">
+                    <div>🏟 {p['league']['name']}</div>
+                    <div>🕒 {hora_inicio}</div>
+                    <div>{estado_color}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-        # ---------------------------------------------------------
-        # LIVE
-        # ---------------------------------------------------------
-        if estado in ["1H", "HT", "2H", "ET"]:
-            st.write(f"⏱ Minuto: **{minuto}**")
-            st.write(f"⚽ Marcador: **{gl} - {gv}**")
+            # LIVE
+            if estado in ["1H", "HT", "2H", "ET"]:
+                st.write(f"⏱ Minuto: **{minuto}**")
+                st.write(f"⚽ Marcador: **{gl} - {gv}**")
 
-            stats = obtener_stats_live(fixture_id)
-            home_stats, away_stats = parse_stats(stats)
+                stats = obtener_stats_live(fixture_id)
+                home_stats, away_stats = parse_stats(stats)
 
-            momentum_home = calcular_momentum(home_stats)
-            momentum_away = calcular_momentum(away_stats)
+                momentum_home = calcular_momentum(home_stats)
+                momentum_away = calcular_momentum(away_stats)
 
-            shots = home_stats.get("shots", 0) + away_stats.get("shots", 0)
-            shots_on = home_stats.get("shots_on", 0) + away_stats.get("shots_on", 0)
-            da = home_stats.get("dangerous_attacks", 0) + away_stats.get("dangerous_attacks", 0)
-            poss = (home_stats.get("possession", 0) + away_stats.get("possession", 0)) / 2
+                shots = home_stats.get("shots", 0) + away_stats.get("shots", 0)
+                shots_on = home_stats.get("shots_on", 0) + away_stats.get("shots_on", 0)
+                da = home_stats.get("dangerous_attacks", 0) + away_stats.get("dangerous_attacks", 0)
+                poss = (home_stats.get("possession", 0) + away_stats.get("possession", 0)) / 2
 
-            pg = prob_gol_live(minuto, shots, shots_on, da, poss)
-            pb = prob_btts_live(gl, gv, momentum_home, momentum_away, pg)
-            po = prob_over25_live(gt, pg, momentum_home, momentum_away)
+                pg = prob_gol_live(minuto, shots, shots_on, da, poss)
+                pb = prob_btts_live(gl, gv, momentum_home, momentum_away, pg)
+                po = prob_over25_live(gt, pg, momentum_home, momentum_away)
 
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Prob. gol LIVE", f"{pg}%")
-            c2.metric("BTTS LIVE", f"{pb}%")
-            c3.metric("Over 2.5 LIVE", f"{po}%")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Prob. gol LIVE", f"{pg}%")
+                c2.metric("BTTS LIVE", f"{pb}%")
+                c3.metric("Over 2.5 LIVE", f"{po}%")
 
-            c4, c5 = st.columns(2)
-            c4.metric("Momentum Local", momentum_home)
-            c5.metric("Momentum Visitante", momentum_away)
+                c4, c5 = st.columns(2)
+                c4.metric("Momentum Local", momentum_home)
+                c5.metric("Momentum Visitante", momentum_away)
 
-            momentum_total = momentum_home + momentum_away
+                momentum_total = momentum_home + momentum_away
+                partido_nombre = f"{t['home']['name']} vs {t['away']['name']}"
+                resultado_final = f"{gl}-{gv}"
 
-            # ---------------------------------------------------------
-            # MOMENTOS ÓPTIMOS
-            # ---------------------------------------------------------
+                # MOMENTOS ÓPTIMOS
 
-            # GOL
-            aviso_gol_local_pre = detectar_momento_gol_pre(momentum_home, momentum_away, pg, gt)
-            aviso_gol_visit_pre = detectar_momento_gol_pre(momentum_away, momentum_home, pg, gt)
+                # GOL
+                aviso_gol_local_pre = detectar_momento_gol_pre(momentum_home, momentum_away, pg, gt)
+                aviso_gol_visit_pre = detectar_momento_gol_pre(momentum_away, momentum_home, pg, gt)
 
-            aviso_gol_local_post = detectar_momento_gol_post(momentum_home, momentum_away, pg, gt)
-            aviso_gol_visit_post = detectar_momento_gol_post(momentum_away, momentum_home, pg, gt)
+                aviso_gol_local_post = detectar_momento_gol_post(momentum_home, momentum_away, pg, gt)
+                aviso_gol_visit_post = detectar_momento_gol_post(momentum_away, momentum_home, pg, gt)
 
-            # BTTS
-            aviso_btts_pre = detectar_momento_btts_pre(momentum_home, momentum_away, pb, gt)
-            aviso_btts_post = detectar_momento_btts_post(momentum_home, momentum_away, pb, gt)
+                # BTTS
+                aviso_btts_pre = detectar_momento_btts_pre(momentum_home, momentum_away, pb, gt)
+                aviso_btts_post = detectar_momento_btts_post(momentum_home, momentum_away, pb, gt)
 
-            # OVER
-            aviso_over_pre = detectar_momento_over_pre(po, gt, momentum_total)
-            aviso_over_post = detectar_momento_over_post(po, gt, momentum_total)
+                # OVER
+                aviso_over_pre = detectar_momento_over_pre(po, gt, momentum_total)
+                aviso_over_post = detectar_momento_over_post(po, gt, momentum_total)
 
-            # Mostrar avisos con minuto incluido
-            if aviso_gol_local_pre:
-                st.success(f"⚽ {aviso_gol_local_pre} (LOCAL) — min {minuto}")
-            if aviso_gol_visit_pre:
-                st.success(f"⚽ {aviso_gol_visit_pre} (VISITANTE) — min {minuto}")
+                # Mostrar avisos con minuto y registrar
+                if aviso_gol_local_pre:
+                    st.success(f"⚽ {aviso_gol_local_pre} (LOCAL) — min {minuto}")
+                    registrar_aviso(partido_nombre, aviso_gol_local_pre, minuto, pg, gt, resultado_final)
 
-            if aviso_gol_local_post:
-                st.success(f"⚽ {aviso_gol_local_post} (LOCAL) — min {minuto}")
-            if aviso_gol_visit_post:
-                st.success(f"⚽ {aviso_gol_visit_post} (VISITANTE) — min {minuto}")
+                if aviso_gol_visit_pre:
+                    st.success(f"⚽ {aviso_gol_visit_pre} (VISITANTE) — min {minuto}")
+                    registrar_aviso(partido_nombre, aviso_gol_visit_pre, minuto, pg, gt, resultado_final)
 
-            if aviso_btts_pre:
-                st.warning(f"🔄 {aviso_btts_pre} — min {minuto}")
-            if aviso_btts_post:
-                st.warning(f"🔄 {aviso_btts_post} — min {minuto}")
- 
-            if aviso_over_pre:
-                st.error(f"🔥 {aviso_over_pre} — min {minuto}")
-            if aviso_over_post:
-                st.error(f"🔥 {aviso_over_post} — min {minuto}")
+                if aviso_gol_local_post:
+                    st.success(f"⚽ {aviso_gol_local_post} (LOCAL) — min {minuto}")
+                    registrar_aviso(partido_nombre, aviso_gol_local_post, minuto, pg, gt, resultado_final)
 
+                if aviso_gol_visit_post:
+                    st.success(f"⚽ {aviso_gol_visit_post} (VISITANTE) — min {minuto}")
+                    registrar_aviso(partido_nombre, aviso_gol_visit_post, minuto, pg, gt, resultado_final)
+
+                if aviso_btts_pre:
+                    st.warning(f"🔄 {aviso_btts_pre} — min {minuto}")
+                    registrar_aviso(partido_nombre, aviso_btts_pre, minuto, pb, gt, resultado_final)
+
+                if aviso_btts_post:
+                    st.warning(f"🔄 {aviso_btts_post} — min {minuto}")
+                    registrar_aviso(partido_nombre, aviso_btts_post, minuto, pb, gt, resultado_final)
+
+                if aviso_over_pre:
+                    st.error(f"🔥 {aviso_over_pre} — min {minuto}")
+                    registrar_aviso(partido_nombre, aviso_over_pre, minuto, po, gt, resultado_final)
+
+                if aviso_over_post:
+                    st.error(f"🔥 {aviso_over_post} — min {minuto}")
+                    registrar_aviso(partido_nombre, aviso_over_post, minuto, po, gt, resultado_final)
 
             st.markdown("---")
+
+# ---------------------------------------------------------
+# TAB 2 — RENTABILIDAD
+# ---------------------------------------------------------
+with tab2:
+    st.header("📊 Rentabilidad GolAlert PRO")
+
+    if os.path.exists(LOG_FILE):
+        df = pd.read_csv(LOG_FILE)
+
+        st.subheader("📑 Historial de avisos")
+        st.dataframe(df)
+
+        # Cálculo de aciertos
+        def es_acierto(row):
+            goles_local, goles_visit = map(int, row["resultado_final"].split("-"))
+            total_goles = goles_local + goles_visit
+
+            aviso = row["aviso"]
+
+            if "GOL" in aviso:
+                return 1 if row["goles"] > 0 else 0
+            if "BTTS" in aviso:
+                return 1 if (goles_local > 0 and goles_visit > 0) else 0
+            if "OVER" in aviso:
+                return 1 if total_goles >= 3 else 0
+            return 0
+
+        df["acierto"] = df.apply(es_acierto, axis=1)
+        aciertos = df["acierto"].mean() * 100 if len(df) > 0 else 0
+
+        st.subheader("📈 Estadísticas")
+        st.write(f"✔ Aciertos totales: {aciertos:.2f}%")
+
+        # ROI simulado (apuesta fija 1 unidad)
+        df["roi"] = df["acierto"].apply(lambda x: 1 if x == 1 else -1)
+        roi_total = df["roi"].sum()
+
+        st.write(f"💰 ROI total (simulado, 1 unidad por aviso): {roi_total} unidades")
+
+        # Value medio (aprox: prob / 50%)
+        df["value"] = df["prob"] / 50
+        st.write(f"🔥 Value medio aproximado: {df['value'].mean():.2f}")
+
+    else:
+        st.info("Todavía no hay avisos registrados. Deja la app funcionando y vuelve más tarde a esta pestaña.")
 
 # ---------------------------------------------------------
 # PIE
