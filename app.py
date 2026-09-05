@@ -128,6 +128,51 @@ def parse_stats(stats):
     return home, away
 
 # ---------------------------------------------------------
+# EVENTOS DEL PARTIDO
+# ---------------------------------------------------------
+@st.cache_data(ttl=20)
+def obtener_eventos(fixture_id):
+    url = f"{BASE_URL}/fixtures/events?fixture={fixture_id}"
+    resp = requests.get(url, headers=HEADERS).json()
+    return resp.get("response", [])
+
+def stats_desde_eventos(eventos):
+    stats = {
+        "shots": 0,
+        "shots_on": 0,
+        "dangerous_attacks": 0,
+        "corners": 0,
+        "possession": 50,
+        "xg": 0
+    }
+
+    for e in eventos:
+        tipo = e["type"]
+        detalle = e.get("detail", "")
+
+        if tipo == "Shot":
+            stats["shots"] += 1
+            if detalle == "On Target":
+                stats["shots_on"] += 1
+
+        if tipo == "Attack":
+            stats["dangerous_attacks"] += 1
+
+        if tipo == "Corner":
+            stats["corners"] += 1
+
+        if tipo == "Goal":
+            stats["xg"] += 0.25
+
+    return stats
+
+def minuto_real_gol(eventos):
+    goles = [e for e in eventos if e["type"] == "Goal"]
+    if not goles:
+        return None
+    return goles[-1]["time"]["elapsed"]
+
+# ---------------------------------------------------------
 # MOMENTUM
 # ---------------------------------------------------------
 def calcular_momentum(stats_equipo):
@@ -148,6 +193,12 @@ def calcular_momentum(stats_equipo):
     )
     return round(momentum, 1)
 
+def momentum_hibrido(stats_equipo, eventos_equipo):
+    if stats_equipo and any(stats_equipo.values()):
+        return calcular_momentum(stats_equipo)
+    stats_eventos = stats_desde_eventos(eventos_equipo)
+    return calcular_momentum(stats_eventos)
+
 # ---------------------------------------------------------
 # PROBABILIDADES
 # ---------------------------------------------------------
@@ -160,6 +211,22 @@ def prob_gol_live(minuto, shots, shots_on, da, poss):
         poss * 0.15
     )
     return round(np.clip(score, 0, 100), 1)
+
+def prob_gol_hibrida(minuto, stats_equipo, eventos_equipo):
+    if stats_equipo and any(stats_equipo.values()):
+        shots = stats_equipo.get("shots", 0)
+        shots_on = stats_equipo.get("shots_on", 0)
+        da = stats_equipo.get("dangerous_attacks", 0)
+        poss = stats_equipo.get("possession", 50)
+        return prob_gol_live(minuto, shots, shots_on, da, poss)
+
+    stats_eventos = stats_desde_eventos(eventos_equipo)
+    shots = stats_eventos["shots"]
+    shots_on = stats_eventos["shots_on"]
+    da = stats_eventos["dangerous_attacks"]
+    poss = stats_eventos["possession"]
+
+    return prob_gol_live(minuto, shots, shots_on, da, poss)
 
 def prob_btts_live(gl, gv, mh, ma, pg):
     if gl > 0 and gv > 0:
@@ -179,10 +246,10 @@ def prob_over25_live(goles, pg, mh, ma):
     if goles == 2:
         return round(pg * 0.9 + momentum_total * 0.05, 1)
     return round(pg * 0.45 + momentum_total * 0.03, 1)
-# ---------------------------------------------------------
-# DETECTORES PRO (momentos fuertes)
-# ---------------------------------------------------------
 
+# ---------------------------------------------------------
+# DETECTORES PRO
+# ---------------------------------------------------------
 def detectar_momento_gol_pre(mh, ma, pg, goles):
     if goles == 0:
         if mh > ma + 15 and pg >= 70:
@@ -226,11 +293,9 @@ def detectar_momento_over_post(po, goles, momentum_total):
         return "OVER POST"
     return None
 
-
 # ---------------------------------------------------------
 # TAB 1 — PARTIDOS EN DIRECTO
 # ---------------------------------------------------------
-
 with tab1:
     st.header("📅 Partidos de HOY — Ligas Favoritas")
 
@@ -259,7 +324,6 @@ with tab1:
 
             st.subheader(partido_nombre)
 
-            # Estado del partido
             if estado in ["1H", "HT", "2H", "ET"]:
                 estado_color = "🟩 En directo"
             elif estado in ["NS", "TBD"]:
@@ -267,7 +331,6 @@ with tab1:
             else:
                 estado_color = "🟥 Finalizado"
 
-            # Cabecera del partido
             st.markdown(
                 f"""
                 <div style="
@@ -286,7 +349,6 @@ with tab1:
                 unsafe_allow_html=True
             )
 
-            # Si está en directo, procesamos estadísticas
             if estado in ["1H", "HT", "2H", "ET"]:
                 st.write(f"⏱ Minuto: **{minuto}**")
                 st.write(f"⚽ Marcador: **{gl} - {gv}**")
@@ -294,24 +356,16 @@ with tab1:
                 stats = obtener_stats_live(fixture_id)
                 home_stats, away_stats = parse_stats(stats)
 
-                # Momentum seguro
-                mh = calcular_momentum(home_stats) if home_stats else 0
-                ma = calcular_momentum(away_stats) if away_stats else 0
+                eventos = obtener_eventos(fixture_id)
+                eventos_local = [e for e in eventos if e["team"]["id"] == t["home"]["id"]]
+                eventos_visitante = [e for e in eventos if e["team"]["id"] == t["away"]["id"]]
 
-                # Datos combinados
-                shots = home_stats.get("shots", 0) + away_stats.get("shots", 0)
-                shots_on = home_stats.get("shots_on", 0) + away_stats.get("shots_on", 0)
-                da = home_stats.get("dangerous_attacks", 0) + away_stats.get("dangerous_attacks", 0)
-                poss = (home_stats.get("possession", 0) + away_stats.get("possession", 0)) / 2
+                mh = momentum_hibrido(home_stats, eventos_local)
+                ma = momentum_hibrido(away_stats, eventos_visitante)
 
-                # Probabilidades
-                pg = prob_gol_live(minuto, shots, shots_on, da, poss)
+                pg = prob_gol_hibrida(minuto, home_stats, eventos_local)
                 pb = prob_btts_live(gl, gv, mh, ma, pg)
                 po = prob_over25_live(gt, pg, mh, ma)
-
-                # ---------------------------------------------------------
-                # MÉTRICAS SIEMPRE ALINEADAS (HTML FLEX)
-                # ---------------------------------------------------------
 
                 st.markdown(
                     f"""
@@ -350,10 +404,6 @@ with tab1:
 
                 momentum_total = mh + ma
 
-                # ---------------------------------------------------------
-                # DETECTORES DE MOMENTOS ÓPTIMOS
-                # ---------------------------------------------------------
-
                 avisos = [
                     detectar_momento_gol_pre(mh, ma, pg, gt),
                     detectar_momento_gol_post(mh, ma, pg, gt),
@@ -363,20 +413,20 @@ with tab1:
                     detectar_momento_over_post(po, gt, momentum_total)
                 ]
 
-                # Mostrar avisos y registrar en CSV
                 for aviso in avisos:
                     if aviso:
-
-                        # GOL
                         if "GOL" in aviso:
                             if "PRE" in aviso:
                                 st.success(f"⚽ {aviso} — min {minuto} — prob {pg}%")
                                 registrar_aviso(partido_nombre, liga, aviso, minuto, pg, gt, resultado_final)
                             else:
-                                st.success(f"⚽ {aviso} — min {minuto}")
+                                minuto_real = minuto_real_gol(eventos)
+                                if minuto_real:
+                                    st.success(f"⚽ {aviso} — gol real min {minuto_real}")
+                                else:
+                                    st.success(f"⚽ {aviso} — min {minuto}")
                                 registrar_aviso(partido_nombre, liga, aviso, minuto, "-", gt, resultado_final)
 
-                        # BTTS
                         elif "BTTS" in aviso:
                             if "PRE" in aviso:
                                 st.warning(f"🔄 {aviso} — min {minuto} — prob {pb}%")
@@ -385,7 +435,6 @@ with tab1:
                                 st.warning(f"🔄 {aviso} — min {minuto}")
                                 registrar_aviso(partido_nombre, liga, aviso, minuto, "-", gt, resultado_final)
 
-                        # OVER
                         elif "OVER" in aviso:
                             if "PRE" in aviso:
                                 st.error(f"🔥 {aviso} — min {minuto} — prob {po}%")
@@ -395,10 +444,10 @@ with tab1:
                                 registrar_aviso(partido_nombre, liga, aviso, minuto, "-", gt, resultado_final)
 
             st.markdown("---")
+
 # ---------------------------------------------------------
 # TAB 2 — RENTABILIDAD
 # ---------------------------------------------------------
-
 with tab2:
     st.header("📊 Rentabilidad GolAlert PRO")
 
@@ -410,15 +459,9 @@ with tab2:
             st.warning("El archivo de avisos es antiguo. Se actualizará cuando lleguen nuevos avisos.")
             st.stop()
 
-        # ------------------------------
-        # HISTORIAL DE AVISOS
-        # ------------------------------
         st.subheader("📑 Historial de avisos")
         st.dataframe(df)
 
-        # ------------------------------
-        # FUNCIÓN DE ACIERTO
-        # ------------------------------
         def es_acierto(row):
             try:
                 gl, gv = map(int, row["resultado_final"].split("-"))
@@ -430,32 +473,22 @@ with tab2:
 
             if "GOL" in aviso:
                 return 1 if row["goles"] > 0 else 0
-
             if "BTTS" in aviso:
                 return 1 if gl > 0 and gv > 0 else 0
-
             if "OVER" in aviso:
                 return 1 if total >= 3 else 0
-
             return 0
 
         df["acierto"] = df.apply(es_acierto, axis=1)
         df["roi"] = df["acierto"].apply(lambda x: 1 if x == 1 else -1)
         df["value"] = df["prob"].apply(lambda p: 0 if p == "-" else float(p) / 50)
 
-        # ------------------------------
-        # ESTADÍSTICAS GLOBALES
-        # ------------------------------
         st.subheader("📈 Estadísticas globales")
         st.write(f"✔ Aciertos totales: **{df['acierto'].mean()*100:.2f}%**")
         st.write(f"💰 ROI total: **{df['roi'].sum()} unidades**")
         st.write(f"🔥 Value medio: **{df['value'].mean():.2f}**")
 
-        # ------------------------------
-        # RENTABILIDAD POR LIGAS
-        # ------------------------------
         st.subheader("🏆 Rentabilidad por ligas")
-
         ligas = df["liga"].unique()
         tabla_ligas = []
 
@@ -469,11 +502,7 @@ with tab2:
 
         st.table(pd.DataFrame(tabla_ligas, columns=["Liga", "Acierto", "ROI"]))
 
-        # ------------------------------
-        # RENTABILIDAD POR MERCADOS
-        # ------------------------------
         st.subheader("🎯 Rentabilidad por mercados")
-
         mercados = ["GOL", "BTTS", "OVER"]
         tabla_mercados = []
 
@@ -492,6 +521,5 @@ with tab2:
         st.table(pd.DataFrame(tabla_mercados, columns=["Mercado", "Acierto", "ROI", "Value"]))
 
         st.success("Rentabilidad calculada correctamente.")
-
     else:
         st.info("Todavía no hay avisos registrados. Deja la app funcionando y vuelve más tarde.")
