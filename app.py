@@ -177,13 +177,12 @@ def prob_over25_live(goles, pg, mh, ma):
         return 98.0
     momentum_total = mh + ma
     if goles == 2:
-:
         return round(pg * 0.9 + momentum_total * 0.05, 1)
     return round(pg * 0.45 + momentum_total * 0.03, 1)
-
 # ---------------------------------------------------------
 # DETECTORES PRO (momentos fuertes)
 # ---------------------------------------------------------
+
 def detectar_momento_gol_pre(mh, ma, pg, goles):
     if goles == 0:
         if mh > ma + 15 and pg >= 70:
@@ -227,9 +226,11 @@ def detectar_momento_over_post(po, goles, momentum_total):
         return "OVER POST"
     return None
 
+
 # ---------------------------------------------------------
 # TAB 1 — PARTIDOS EN DIRECTO
 # ---------------------------------------------------------
+
 with tab1:
     st.header("📅 Partidos de HOY — Ligas Favoritas")
 
@@ -258,6 +259,7 @@ with tab1:
 
             st.subheader(partido_nombre)
 
+            # Estado del partido
             if estado in ["1H", "HT", "2H", "ET"]:
                 estado_color = "🟩 En directo"
             elif estado in ["NS", "TBD"]:
@@ -265,6 +267,7 @@ with tab1:
             else:
                 estado_color = "🟥 Finalizado"
 
+            # Cabecera del partido
             st.markdown(
                 f"""
                 <div style="
@@ -283,6 +286,7 @@ with tab1:
                 unsafe_allow_html=True
             )
 
+            # Si está en directo, procesamos estadísticas
             if estado in ["1H", "HT", "2H", "ET"]:
                 st.write(f"⏱ Minuto: **{minuto}**")
                 st.write(f"⚽ Marcador: **{gl} - {gv}**")
@@ -290,17 +294,24 @@ with tab1:
                 stats = obtener_stats_live(fixture_id)
                 home_stats, away_stats = parse_stats(stats)
 
+                # Momentum seguro
                 mh = calcular_momentum(home_stats) if home_stats else 0
                 ma = calcular_momentum(away_stats) if away_stats else 0
 
+                # Datos combinados
                 shots = home_stats.get("shots", 0) + away_stats.get("shots", 0)
                 shots_on = home_stats.get("shots_on", 0) + away_stats.get("shots_on", 0)
                 da = home_stats.get("dangerous_attacks", 0) + away_stats.get("dangerous_attacks", 0)
                 poss = (home_stats.get("possession", 0) + away_stats.get("possession", 0)) / 2
 
+                # Probabilidades
                 pg = prob_gol_live(minuto, shots, shots_on, da, poss)
                 pb = prob_btts_live(gl, gv, mh, ma, pg)
                 po = prob_over25_live(gt, pg, mh, ma)
+
+                # ---------------------------------------------------------
+                # MÉTRICAS SIEMPRE ALINEADAS (HTML FLEX)
+                # ---------------------------------------------------------
 
                 st.markdown(
                     f"""
@@ -339,6 +350,10 @@ with tab1:
 
                 momentum_total = mh + ma
 
+                # ---------------------------------------------------------
+                # DETECTORES DE MOMENTOS ÓPTIMOS
+                # ---------------------------------------------------------
+
                 avisos = [
                     detectar_momento_gol_pre(mh, ma, pg, gt),
                     detectar_momento_gol_post(mh, ma, pg, gt),
@@ -348,8 +363,11 @@ with tab1:
                     detectar_momento_over_post(po, gt, momentum_total)
                 ]
 
+                # Mostrar avisos y registrar en CSV
                 for aviso in avisos:
                     if aviso:
+
+                        # GOL
                         if "GOL" in aviso:
                             if "PRE" in aviso:
                                 st.success(f"⚽ {aviso} — min {minuto} — prob {pg}%")
@@ -358,6 +376,7 @@ with tab1:
                                 st.success(f"⚽ {aviso} — min {minuto}")
                                 registrar_aviso(partido_nombre, liga, aviso, minuto, "-", gt, resultado_final)
 
+                        # BTTS
                         elif "BTTS" in aviso:
                             if "PRE" in aviso:
                                 st.warning(f"🔄 {aviso} — min {minuto} — prob {pb}%")
@@ -366,6 +385,7 @@ with tab1:
                                 st.warning(f"🔄 {aviso} — min {minuto}")
                                 registrar_aviso(partido_nombre, liga, aviso, minuto, "-", gt, resultado_final)
 
+                        # OVER
                         elif "OVER" in aviso:
                             if "PRE" in aviso:
                                 st.error(f"🔥 {aviso} — min {minuto} — prob {po}%")
@@ -375,10 +395,10 @@ with tab1:
                                 registrar_aviso(partido_nombre, liga, aviso, minuto, "-", gt, resultado_final)
 
             st.markdown("---")
-
 # ---------------------------------------------------------
 # TAB 2 — RENTABILIDAD
 # ---------------------------------------------------------
+
 with tab2:
     st.header("📊 Rentabilidad GolAlert PRO")
 
@@ -390,9 +410,15 @@ with tab2:
             st.warning("El archivo de avisos es antiguo. Se actualizará cuando lleguen nuevos avisos.")
             st.stop()
 
+        # ------------------------------
+        # HISTORIAL DE AVISOS
+        # ------------------------------
         st.subheader("📑 Historial de avisos")
         st.dataframe(df)
 
+        # ------------------------------
+        # FUNCIÓN DE ACIERTO
+        # ------------------------------
         def es_acierto(row):
             try:
                 gl, gv = map(int, row["resultado_final"].split("-"))
@@ -404,22 +430,32 @@ with tab2:
 
             if "GOL" in aviso:
                 return 1 if row["goles"] > 0 else 0
+
             if "BTTS" in aviso:
                 return 1 if gl > 0 and gv > 0 else 0
+
             if "OVER" in aviso:
                 return 1 if total >= 3 else 0
+
             return 0
 
         df["acierto"] = df.apply(es_acierto, axis=1)
         df["roi"] = df["acierto"].apply(lambda x: 1 if x == 1 else -1)
         df["value"] = df["prob"].apply(lambda p: 0 if p == "-" else float(p) / 50)
 
+        # ------------------------------
+        # ESTADÍSTICAS GLOBALES
+        # ------------------------------
         st.subheader("📈 Estadísticas globales")
         st.write(f"✔ Aciertos totales: **{df['acierto'].mean()*100:.2f}%**")
         st.write(f"💰 ROI total: **{df['roi'].sum()} unidades**")
         st.write(f"🔥 Value medio: **{df['value'].mean():.2f}**")
 
+        # ------------------------------
+        # RENTABILIDAD POR LIGAS
+        # ------------------------------
         st.subheader("🏆 Rentabilidad por ligas")
+
         ligas = df["liga"].unique()
         tabla_ligas = []
 
@@ -433,7 +469,11 @@ with tab2:
 
         st.table(pd.DataFrame(tabla_ligas, columns=["Liga", "Acierto", "ROI"]))
 
+        # ------------------------------
+        # RENTABILIDAD POR MERCADOS
+        # ------------------------------
         st.subheader("🎯 Rentabilidad por mercados")
+
         mercados = ["GOL", "BTTS", "OVER"]
         tabla_mercados = []
 
@@ -452,5 +492,6 @@ with tab2:
         st.table(pd.DataFrame(tabla_mercados, columns=["Mercado", "Acierto", "ROI", "Value"]))
 
         st.success("Rentabilidad calculada correctamente.")
+
     else:
         st.info("Todavía no hay avisos registrados. Deja la app funcionando y vuelve más tarde.")
