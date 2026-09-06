@@ -32,7 +32,7 @@ def registrar_aviso(partido, liga, aviso, minuto, prob, goles, resultado_final):
         writer = csv.writer(f)
         writer.writerow([partido, liga, aviso, minuto, prob, goles, resultado_final])
 
-LIGAS_FAVORITAS = [40,62,140,141,135,78,79,61,63,94,88,144]
+LIGAS_FAVORITAS = [40,39,62,140,141,135,78,79,61,63,94,88,144]
 
 def convertir_hora_local(fecha_iso):
     fecha = datetime.fromisoformat(fecha_iso.replace("Z","+00:00"))
