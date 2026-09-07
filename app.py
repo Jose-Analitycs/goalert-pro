@@ -122,6 +122,45 @@ def prob_over25_live(goles, pg, mh, ma):
     if goles>=3: return 98.0
     if goles==2: return round(pg*0.9 + (mh+ma)*0.05,1)
     return round(pg*0.45 + (mh+ma)*0.03,1)
+    
+def detectar_momento_gol_pre(mh, ma, pg, goles):
+    if goles == 0:
+        if mh > ma + 15 and pg >= 70:
+            return "GOL PRE (Local)"
+        if ma > mh + 15 and pg >= 70:
+            return "GOL PRE (Visitante)"
+        if abs(mh - ma) < 10 and pg >= 80:
+            return "GOL PRE (Partido caliente)"
+    return None
+
+def detectar_momento_gol_post(mh, ma, pg, goles):
+    return "GOL POST" if goles >= 1 else None
+
+def detectar_momento_btts_pre(mh, ma, pb, goles):
+    if goles == 0:
+        if mh >= 35 and ma >= 35 and pb >= 70:
+            return "BTTS PRE (Ambos fuertes)"
+        if abs(mh - ma) < 12 and pb >= 75:
+            return "BTTS PRE (Partido caliente)"
+    return None
+
+def detectar_momento_btts_post(mh, ma, pb, goles):
+    if goles == 1 and pb >= 70:
+        return "BTTS POST"
+    if goles >= 2:
+        return "BTTS POST"
+    return None
+
+def detectar_momento_over_pre(po, goles, momentum_total):
+    if goles <= 1:
+        if momentum_total >= 55 and po >= 70:
+            return "OVER PRE (Partido muy ofensivo)"
+        if momentum_total >= 45 and po >= 80:
+            return "OVER PRE (Caliente)"
+    return None
+
+def detectar_momento_over_post(po, goles, momentum_total):
+    return "OVER POST" if goles >= 3 else None
 
 # --- MEMORIA DEL MINUTO DE PREDICCIÓN ---
 if "minuto_prediccion" not in st.session_state:   
