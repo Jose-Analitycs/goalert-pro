@@ -191,9 +191,16 @@ with tab1:
                 po=prob_over25_live(gt,pg,mh,ma)
 
                 pred=[]
-                if pg>=55 or mh>ma+12: pred.append(f"⚽ Posible GOL — prob {pg}% — domina {'Local' if mh>ma else 'Visitante'}")
-                if mh>=25 and ma>=25 and pb>=45: pred.append(f"🔄 Posible BTTS — prob {pb}% — partido abierto")
-                if mh+ma>=45 or po>=50: pred.append(f"🔥 Posible OVER 2.5 — prob {po}% — ritmo alto")
+
+                if pg>=55 or mh>ma+12:
+                    pred.append(f"⚽ Posible GOL — min {minuto} — prob {pg}% — domina {'Local' if mh>ma else 'Visitante'}")
+
+                if mh>=25 and ma>=25 and pb>=45:
+                    pred.append(f"🔄 Posible BTTS — min {minuto} — prob {pb}% — partido abierto")
+
+                if mh+ma>=45 or po>=50:
+                    pred.append(f"🔥 Posible OVER 2.5 — min {minuto} — prob {po}% — ritmo alto")
+
                 if pred:
                     st.info("📡 **Predicciones en tiempo real:**")
                     for ptxt in pred: st.write(ptxt)
