@@ -124,7 +124,7 @@ def prob_over25_live(goles, pg, mh, ma):
     return round(pg*0.45 + (mh+ma)*0.03,1)
 
 # --- MEMORIA DEL MINUTO DE PREDICCIÓN ---
-if "minuto_prediccion" not in st.session_state:
+if "minuto_prediccion" not in st.session_state:   
     st.session_state["minuto_prediccion"] = {}
 with tab1:
     st.header("📅 Partidos de HOY — Ligas Favoritas")
