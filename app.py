@@ -33,7 +33,6 @@ def registrar_aviso(partido, liga, aviso, minuto_prediccion, prob, goles, result
         writer.writerow([partido, liga, aviso, minuto_prediccion, prob, goles, resultado_final])
 
 LIGAS_FAVORITAS = [39,40,62,140,141,135,78,79,61,63,94,88,144]
-
 def convertir_hora_local(fecha_iso):
     fecha = datetime.fromisoformat(fecha_iso.replace("Z","+00:00"))
     return fecha.astimezone(ZoneInfo("Europe/Madrid")).strftime("%H:%M")
@@ -122,7 +121,6 @@ def prob_over25_live(goles, pg, mh, ma):
     if goles>=3: return 98.0
     if goles==2: return round(pg*0.9 + (mh+ma)*0.05,1)
     return round(pg*0.45 + (mh+ma)*0.03,1)
-    
 def detectar_momento_gol_pre(mh, ma, pg, goles):
     if goles == 0:
         if mh > ma + 15 and pg >= 70:
@@ -161,9 +159,7 @@ def detectar_momento_over_pre(po, goles, momentum_total):
 
 def detectar_momento_over_post(po, goles, momentum_total):
     return "OVER POST" if goles >= 3 else None
-
-# --- MEMORIA DEL MINUTO DE PREDICCIÓN ---
-if "minuto_prediccion" not in st.session_state:   
+if "minuto_prediccion" not in st.session_state:
     st.session_state["minuto_prediccion"] = {}
 with tab1:
     st.header("📅 Partidos de HOY — Ligas Favoritas")
@@ -206,27 +202,38 @@ with tab1:
 
                 pred=[]
 
-                # --- PREDICCIONES CON MINUTO FIJO ---
-                if pg>=55 or mh>ma+12:
-                    if partido_nombre not in st.session_state["minuto_prediccion"]:
-                        st.session_state["minuto_prediccion"][partido_nombre] = minuto
+                # --- BLOQUE INTEGRADO ---
+                if partido_nombre in st.session_state["minuto_prediccion"]:
+                    minuto_pred = st.session_state["minuto_prediccion"][partido_nombre]
+
                     pred.append(
-                        f"⚽ Posible GOL — min {st.session_state['minuto_prediccion'][partido_nombre]} — prob {pg}% — domina {'Local' if mh>ma else 'Visitante'}"
+                        f"⚽ Posible GOL — min {minuto_pred} — prob {pg}% — domina {'Local' if mh>ma else 'Visitante'}"
+                    )
+                    pred.append(
+                        f"🔄 Posible BTTS — min {minuto_pred} — prob {pb}% — partido abierto"
+                    )
+                    pred.append(
+                        f"🔥 Posible OVER 2.5 — min {minuto_pred} — prob {po}% — ritmo alto"
                     )
 
-                if mh>=25 and ma>=25 and pb>=45:
-                    if partido_nombre not in st.session_state["minuto_prediccion"]:
+                else:
+                    if pg>=55 or mh>ma+12:
                         st.session_state["minuto_prediccion"][partido_nombre] = minuto
-                    pred.append(
-                        f"🔄 Posible BTTS — min {st.session_state['minuto_prediccion'][partido_nombre]} — prob {pb}% — partido abierto"
-                    )
+                        pred.append(
+                            f"⚽ Posible GOL — min {minuto} — prob {pg}% — domina {'Local' if mh>ma else 'Visitante'}"
+                        )
 
-                if mh+ma>=45 or po>=50:
-                    if partido_nombre not in st.session_state["minuto_prediccion"]:
+                    if mh>=25 and ma>=25 and pb>=45:
                         st.session_state["minuto_prediccion"][partido_nombre] = minuto
-                    pred.append(
-                        f"🔥 Posible OVER 2.5 — min {st.session_state['minuto_prediccion'][partido_nombre]} — prob {po}% — ritmo alto"
-                    )
+                        pred.append(
+                            f"🔄 Posible BTTS — min {minuto} — prob {pb}% — partido abierto"
+                        )
+
+                    if mh+ma>=45 or po>=50:
+                        st.session_state["minuto_prediccion"][partido_nombre] = minuto
+                        pred.append(
+                            f"🔥 Posible OVER 2.5 — min {minuto} — prob {po}% — ritmo alto"
+                        )
 
                 if pred:
                     st.info("📡 **Predicciones en tiempo real:**")
@@ -242,6 +249,7 @@ with tab1:
                     detectar_momento_over_pre(po,gt,mh+ma),
                     detectar_momento_over_post(po,gt,mh+ma)
                 ]
+
                 for aviso in avisos:
                     if aviso:
                         minuto_pred = st.session_state["minuto_prediccion"].get(partido_nombre, minuto)
@@ -272,6 +280,7 @@ with tab1:
                                 registrar_aviso(partido_nombre,liga,aviso,minuto,"-",gt,resultado_final)
 
             st.markdown("---")
+
 
 with tab2:
     st.header("📊 Rentabilidad GolAlert PRO")
