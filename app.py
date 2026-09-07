@@ -195,14 +195,14 @@ with tab1:
                         st.write(ptxt)
 
                 # --- REGISTRO DE AVISOS ---
-               avisos=[
-                   detectar_momento_gol_pre(mh,ma,pg,gt),
-                   detectar_momento_gol_post(mh,ma,pg,gt),
-                   detectar_momento_btts_pre(mh,ma,pb,gt),
-                   detectar_momento_btts_post(mh,ma,pb,gt),
-                   detectar_momento_over_pre(po,gt,mh+ma),
-                   detectar_momento_over_post(po,gt,mh+ma)
-               ]
+                avisos=[
+                    detectar_momento_gol_pre(mh,ma,pg,gt),
+                    detectar_momento_gol_post(mh,ma,pg,gt),
+                    detectar_momento_btts_pre(mh,ma,pb,gt),
+                    detectar_momento_btts_post(mh,ma,pb,gt),
+                    detectar_momento_over_pre(po,gt,mh+ma),
+                    detectar_momento_over_post(po,gt,mh+ma)
+                ]
                 for aviso in avisos:
                     if aviso:
                         minuto_pred = st.session_state["minuto_prediccion"].get(partido_nombre, minuto)
