@@ -25,14 +25,14 @@ LOG_FILE = "avisos_golalert.csv"
 if not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0:
     with open(LOG_FILE, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["partido","liga","aviso","minuto","prob","goles","resultado_final"])
+        writer.writerow(["partido","liga","aviso","minuto_prediccion","prob","goles","resultado_final"])
 
-def registrar_aviso(partido, liga, aviso, minuto, prob, goles, resultado_final):
+def registrar_aviso(partido, liga, aviso, minuto_prediccion, prob, goles, resultado_final):
     with open(LOG_FILE, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([partido, liga, aviso, minuto, prob, goles, resultado_final])
+        writer.writerow([partido, liga, aviso, minuto_prediccion, prob, goles, resultado_final])
 
-LIGAS_FAVORITAS = [40,39,62,140,141,135,78,79,61,63,94,88,144]
+LIGAS_FAVORITAS = [39,40,62,140,141,135,78,79,61,63,94,88,144]
 
 def convertir_hora_local(fecha_iso):
     fecha = datetime.fromisoformat(fecha_iso.replace("Z","+00:00"))
@@ -123,39 +123,13 @@ def prob_over25_live(goles, pg, mh, ma):
     if goles==2: return round(pg*0.9 + (mh+ma)*0.05,1)
     return round(pg*0.45 + (mh+ma)*0.03,1)
 
-def detectar_momento_gol_pre(mh, ma, pg, goles):
-    if goles==0:
-        if mh>ma+15 and pg>=70: return "GOL PRE (Local)"
-        if ma>mh+15 and pg>=70: return "GOL PRE (Visitante)"
-        if abs(mh-ma)<10 and pg>=80: return "GOL PRE (Partido caliente)"
-    return None
-
-def detectar_momento_gol_post(mh, ma, pg, goles):
-    return "GOL POST" if goles>=1 else None
-
-def detectar_momento_btts_pre(mh, ma, pb, goles):
-    if goles==0:
-        if mh>=35 and ma>=35 and pb>=70: return "BTTS PRE (Ambos fuertes)"
-        if abs(mh-ma)<12 and pb>=75: return "BTTS PRE (Partido caliente)"
-    return None
-
-def detectar_momento_btts_post(mh, ma, pb, goles):
-    if goles==1 and pb>=70: return "BTTS POST"
-    if goles>=2: return "BTTS POST"
-    return None
-
-def detectar_momento_over_pre(po, goles, momentum_total):
-    if goles<=1:
-        if momentum_total>=55 and po>=70: return "OVER PRE (Partido muy ofensivo)"
-        if momentum_total>=45 and po>=80: return "OVER PRE (Caliente)"
-    return None
-
-def detectar_momento_over_post(po, goles, momentum_total):
-    return "OVER POST" if goles>=3 else None
-
+# --- MEMORIA DEL MINUTO DE PREDICCIÓN ---
+if "minuto_prediccion" not in st.session_state:    
+    st.session_state["minuto_prediccion"] = {}
 with tab1:
     st.header("📅 Partidos de HOY — Ligas Favoritas")
     partidos_hoy = obtener_partidos_hoy()
+
     if not partidos_hoy:
         st.warning("No hay partidos hoy en tus ligas favoritas.")
     else:
@@ -171,6 +145,7 @@ with tab1:
             resultado_final=f"{gl}-{gv}"
 
             st.subheader(partido_nombre)
+
             estado_color="🟩 En directo" if estado in ["1H","HT","2H","ET"] else ("🟧 Por empezar" if estado in ["NS","TBD"] else "🟥 Finalizado")
             st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:18px;font-weight:bold;padding:8px'><div>🏟 {liga}</div><div>🕒 {hora_inicio}</div><div>{estado_color}</div></div>", unsafe_allow_html=True)
 
@@ -192,22 +167,34 @@ with tab1:
 
                 pred=[]
 
+                # --- PREDICCIONES CON MINUTO FIJO ---
                 if pg>=55 or mh>ma+12:
-                    pred.append(f"⚽ Posible GOL — min {minuto} — prob {pg}% — domina {'Local' if mh>ma else 'Visitante'}")
+                    if partido_nombre not in st.session_state["minuto_prediccion"]:
+                        st.session_state["minuto_prediccion"][partido_nombre] = minuto
+                    pred.append(
+                        f"⚽ Posible GOL — min {st.session_state['minuto_prediccion'][partido_nombre]} — prob {pg}% — domina {'Local' if mh>ma else 'Visitante'}"
+                    )
 
                 if mh>=25 and ma>=25 and pb>=45:
-                    pred.append(f"🔄 Posible BTTS — min {minuto} — prob {pb}% — partido abierto")
+                    if partido_nombre not in st.session_state["minuto_prediccion"]:
+                        st.session_state["minuto_prediccion"][partido_nombre] = minuto
+                    pred.append(
+                        f"🔄 Posible BTTS — min {st.session_state['minuto_prediccion'][partido_nombre]} — prob {pb}% — partido abierto"
+                    )
 
                 if mh+ma>=45 or po>=50:
-                    pred.append(f"🔥 Posible OVER 2.5 — min {minuto} — prob {po}% — ritmo alto")
+                    if partido_nombre not in st.session_state["minuto_prediccion"]:
+                        st.session_state["minuto_prediccion"][partido_nombre] = minuto
+                    pred.append(
+                        f"🔥 Posible OVER 2.5 — min {st.session_state['minuto_prediccion'][partido_nombre]} — prob {po}% — ritmo alto"
+                    )
 
                 if pred:
                     st.info("📡 **Predicciones en tiempo real:**")
-                    for ptxt in pred: st.write(ptxt)
+                    for ptxt in pred:
+                        st.write(ptxt)
 
-                st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:18px;font-weight:bold;padding:10px'><div>Prob. Gol LIVE: {pg}%</div><div>BTTS LIVE: {pb}%</div><div>Over 2.5 LIVE: {po}%</div></div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:18px;font-weight:bold;padding:10px'><div>Momentum Local: {mh}</div><div>Momentum Visitante: {ma}</div></div>", unsafe_allow_html=True)
-
+                # --- REGISTRO DE AVISOS ---
                 avisos=[
                     detectar_momento_gol_pre(mh,ma,pg,gt),
                     detectar_momento_gol_post(mh,ma,pg,gt),
@@ -219,25 +206,29 @@ with tab1:
 
                 for aviso in avisos:
                     if aviso:
+                        minuto_pred = st.session_state["minuto_prediccion"].get(partido_nombre, minuto)
+
                         if "GOL" in aviso:
                             if "PRE" in aviso:
-                                st.success(f"⚽ {aviso} — min {minuto} — prob {pg}%")
-                                registrar_aviso(partido_nombre,liga,aviso,minuto,pg,gt,resultado_final)
+                                st.success(f"⚽ {aviso} — min {minuto_pred} — prob {pg}%")
+                                registrar_aviso(partido_nombre,liga,aviso,minuto_pred,pg,gt,resultado_final)
                             else:
                                 mr=minuto_real_gol(eventos)
                                 st.success(f"⚽ {aviso} — gol real min {mr if mr else minuto}")
-                                registrar_aviso(partido_nombre,liga,aviso,minuto,"-",gt,resultado_final)
+                                registrar_aviso(partido_nombre,liga,aviso,mr if mr else minuto,"-",gt,resultado_final)
+
                         elif "BTTS" in aviso:
                             if "PRE" in aviso:
-                                st.warning(f"🔄 {aviso} — min {minuto} — prob {pb}%")
-                                registrar_aviso(partido_nombre,liga,aviso,minuto,pb,gt,resultado_final)
+                                st.warning(f"🔄 {aviso} — min {minuto_pred} — prob {pb}%")
+                                registrar_aviso(partido_nombre,liga,aviso,minuto_pred,pb,gt,resultado_final)
                             else:
                                 st.warning(f"🔄 {aviso} — min {minuto}")
                                 registrar_aviso(partido_nombre,liga,aviso,minuto,"-",gt,resultado_final)
+
                         elif "OVER" in aviso:
                             if "PRE" in aviso:
-                                st.error(f"🔥 {aviso} — min {minuto} — prob {po}%")
-                                registrar_aviso(partido_nombre,liga,aviso,minuto,po,gt,resultado_final)
+                                st.error(f"🔥 {aviso} — min {minuto_pred} — prob {po}%")
+                                registrar_aviso(partido_nombre,liga,aviso,minuto_pred,po,gt,resultado_final)
                             else:
                                 st.error(f"🔥 {aviso} — min {minuto}")
                                 registrar_aviso(partido_nombre,liga,aviso,minuto,"-",gt,resultado_final)
@@ -246,6 +237,7 @@ with tab1:
 
 with tab2:
     st.header("📊 Rentabilidad GolAlert PRO")
+
     if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE)>0:
         df=pd.read_csv(LOG_FILE)
         st.subheader("📑 Historial de avisos")
